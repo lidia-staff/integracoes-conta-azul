@@ -252,6 +252,43 @@ def approve_sale(sale_id: int):
         db.close()
 
 
+@router.delete("/batches/{batch_id}")
+def delete_batch(batch_id: int):
+    """
+    Exclui um lote e todas as vendas associadas.
+    Permitido apenas para lotes com status ERRO ou AGUARDANDO_APROVACAO.
+    Lotes com vendas ENVIADA_CA não podem ser excluídos.
+    """
+    db: Session = SessionLocal()
+    try:
+        from app.db.models import UploadBatch
+        batch = db.query(UploadBatch).filter(UploadBatch.id == batch_id).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Lote não encontrado")
+
+        sales = db.query(Sale).filter(Sale.batch_id == batch_id).all()
+
+        # Bloqueia exclusão se qualquer venda já foi enviada ao CA
+        enviadas = [s for s in sales if s.status == "ENVIADA_CA"]
+        if enviadas:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Lote contém {len(enviadas)} venda(s) já enviada(s) ao Conta Azul e não pode ser excluído."
+            )
+
+        total = len(sales)
+        for sale in sales:
+            db.query(SaleItem).filter(SaleItem.sale_id == sale.id).delete()
+            db.delete(sale)
+
+        db.delete(batch)
+        db.commit()
+
+        return {"ok": True, "batch_id": batch_id, "sales_deleted": total}
+    finally:
+        db.close()
+
+
 @router.post("/batches/{batch_id}/approve")
 def approve_batch(batch_id: int):
     db: Session = SessionLocal()

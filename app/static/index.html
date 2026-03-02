@@ -641,12 +641,13 @@ async function loadBatches() {
     container.innerHTML = Object.values(batches).reverse().map(b => {
       const total = b.sales.length;
       const enviadas = b.sales.filter(s => s.status === 'ENVIADA_CA').length;
-      const erros = b.sales.filter(s => s.status === 'ERRO_ENVIO_CA').length;
+      const erros = b.sales.filter(s => ['ERRO', 'ERRO_ENVIO_CA'].includes(s.status)).length;
       const prontas = b.sales.filter(s => s.status === 'PRONTA').length;
       const aguardando = b.sales.filter(s => s.status === 'AGUARDANDO_APROVACAO').length;
+      const podeDeletar = enviadas === 0; // só permite excluir se nenhuma foi ao CA
 
       return `
-      <div class="card">
+      <div class="card" id="batch-card-${b.id}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
           <div>
             <div style="font-weight:600;font-size:15px">Lote #${b.id}</div>
@@ -663,9 +664,10 @@ async function loadBatches() {
           ${aguardando > 0 ? `<button class="btn btn-secondary btn-sm" onclick="approveBatch(${b.id})">✓ Aprovar (${aguardando})</button>` : ''}
           ${prontas > 0 ? `<button class="btn btn-primary btn-sm" onclick="sendBatch(${b.id}, this)">🚀 Enviar ao CA (${prontas})</button>` : ''}
           ${erros > 0 ? `<button class="btn btn-danger btn-sm" onclick="toggleErrors(${b.id})">Ver erros</button>` : ''}
+          ${podeDeletar ? `<button class="btn btn-danger btn-sm" onclick="deleteBatch(${b.id})" style="margin-left:auto" title="Excluir lote e todas as vendas">🗑 Excluir Lote</button>` : ''}
         </div>
         <div id="errors-${b.id}" style="display:none;margin-top:14px">
-          ${b.sales.filter(s => s.status === 'ERRO_ENVIO_CA').map(s => `
+          ${b.sales.filter(s => ['ERRO','ERRO_ENVIO_CA'].includes(s.status)).map(s => `
             <div style="margin-bottom:8px">
               <div style="font-size:13px;font-weight:500">${s.customer_name} — R$ ${parseFloat(s.total_amount).toFixed(2)}</div>
               <div class="error-detail">${s.error_summary || 'Sem detalhes'}</div>
@@ -682,6 +684,22 @@ async function loadBatches() {
 function toggleErrors(batchId) {
   const el = document.getElementById('errors-' + batchId);
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function deleteBatch(batchId) {
+  const ok = confirm(`Excluir Lote #${batchId} e todas as suas vendas?\n\nEsta ação não pode ser desfeita.`);
+  if (!ok) return;
+  try {
+    const res = await fetch(`${API}/v1/batches/${batchId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao excluir');
+    // Remove o card da tela imediatamente
+    const card = document.getElementById(`batch-card-${batchId}`);
+    if (card) card.remove();
+    toast(`🗑 Lote #${batchId} excluído (${data.sales_deleted} vendas removidas)`, 'success');
+  } catch(e) {
+    toast(`Erro ao excluir: ${e.message}`, 'error');
+  }
 }
 
 async function approveBatch(batchId) {
