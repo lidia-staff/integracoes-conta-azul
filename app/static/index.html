@@ -332,6 +332,26 @@
         </div>
         <button class="btn btn-primary btn-sm" onclick="saveCaSaleStatus()">Salvar Status</button>
       </div>
+
+      <!-- Centro de Custo -->
+      <div class="card">
+        <div class="card-title">🏷️ Mapeamento Centro de Custo</div>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
+          Mapeia o nome da coluna CENTRO_CUSTO da planilha para o UUID do CA.
+        </p>
+        <div id="cost-centers-list" style="margin-bottom:16px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div class="form-group" style="margin:0;flex:1;min-width:120px">
+            <label>Nome (planilha)</label>
+            <input type="text" id="ccNameInput" placeholder="Ex: LAVANDERIA" style="text-transform:uppercase">
+          </div>
+          <div class="form-group" style="margin:0;flex:2;min-width:200px">
+            <label>UUID no CA (36 chars)</label>
+            <input type="text" id="ccUuidInput" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="addCostCenter()" style="margin-bottom:1px">+ Adicionar</button>
+        </div>
+      </div>
       <!-- PIN de Acesso -->
       <div class="card">
         <div class="card-title" id="pinCardTitle">🔒 PIN de Acesso</div>
@@ -416,7 +436,7 @@ function showPage(page) {
   
   if (page === 'dashboard') loadDashboard();
   if (page === 'batches') loadBatches();
-  if (page === 'config') { loadCAAccounts(); loadPaymentMappings(); loadDefaultAccount(); loadGroupMode(); loadPinStatus(); }
+  if (page === 'config') { loadCAAccounts(); loadPaymentMappings(); loadDefaultAccount(); loadGroupMode(); loadPinStatus(); loadCostCenters(); }
 }
 
 // ─── COMPANY ──────────────────────────────────────────────────────
@@ -1016,6 +1036,63 @@ document.addEventListener('DOMContentLoaded', () => {
   const sel = document.getElementById('groupModeSelect');
   if (sel) sel.addEventListener('change', () => updateGroupModeDesc(sel.value));
 });
+
+
+async function loadCostCenters() {
+  const el = document.getElementById('cost-centers-list');
+  if (!el) return;
+  try {
+    const res = await fetch(`${API}/v1/companies/${currentCompanyId}/cost-centers`);
+    const data = await res.json();
+    if (!data.length) {
+      el.innerHTML = '<p style="color:var(--muted);font-size:13px">Nenhum mapeamento configurado.</p>';
+      return;
+    }
+    el.innerHTML = `<table style="width:100%;font-size:13px">
+      <tr><th>Nome (planilha)</th><th>UUID CA</th><th></th></tr>
+      ${data.map(r => `<tr>
+        <td><span class="badge badge-gray">${r.label || r.name_key}</span></td>
+        <td><code style="font-size:11px;color:var(--muted)">${r.ca_cost_center_id.substring(0,18)}...</code></td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteCostCenter('${r.name_key}')">✕</button></td>
+      </tr>`).join('')}
+    </table>`;
+  } catch(e) {
+    el.innerHTML = `<p style="color:var(--error);font-size:13px">${e.message}</p>`;
+  }
+}
+
+async function addCostCenter() {
+  const name = document.getElementById('ccNameInput').value.trim().toUpperCase();
+  const uuid = document.getElementById('ccUuidInput').value.trim();
+  if (!name || !uuid) return toast('Preencha nome e UUID', 'error');
+  if (uuid.length !== 36) return toast('UUID deve ter 36 caracteres', 'error');
+  try {
+    const res = await fetch(`${API}/v1/companies/${currentCompanyId}/cost-centers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name_key: name, ca_cost_center_id: uuid, label: name }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Erro');
+    document.getElementById('ccNameInput').value = '';
+    document.getElementById('ccUuidInput').value = '';
+    toast(`✅ Mapeamento "${name}" salvo`, 'success');
+    loadCostCenters();
+  } catch(e) {
+    toast(`Erro: ${e.message}`, 'error');
+  }
+}
+
+async function deleteCostCenter(nameKey) {
+  if (!confirm(`Remover mapeamento "${nameKey}"?`)) return;
+  try {
+    const res = await fetch(`${API}/v1/companies/${currentCompanyId}/cost-centers/${nameKey}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Erro ao remover');
+    toast(`Mapeamento "${nameKey}" removido`, 'success');
+    loadCostCenters();
+  } catch(e) {
+    toast(`Erro: ${e.message}`, 'error');
+  }
+}
 
 async function saveCaSaleStatus() {
   const status = document.getElementById('caSaleStatusSelect').value;
