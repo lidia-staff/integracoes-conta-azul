@@ -46,8 +46,9 @@ ALIASES = {
 
 
 def normalize_col(col: str) -> str:
-    col = str(col).strip().upper()
+    col = str(col).strip()
     col = unicodedata.normalize("NFKD", col).encode("ASCII", "ignore").decode("ASCII")
+    col = col.upper()  # upper APÓS normalize para tratar casos como Nº → No → NO
     col = col.replace("/", " ").replace("-", " ").replace("_", " ")
     col = " ".join(col.split())
     return col
