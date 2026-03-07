@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.db.models import Sale, SaleItem, Company, CompanyPaymentAccount
+from app.db.models import Sale, SaleItem, Company, CompanyPaymentAccount, CompanyCostCenter
 from app.services.conta_azul_client import ContaAzulClient
 from app.services.contaazul_people import get_or_create_customer_uuid_cached
 from app.services.contaazul_products import get_or_create_product_uuid_cached
@@ -72,6 +72,29 @@ def _resolve_product_uuids(
     return uuid_map
 
 
+
+def _resolve_cost_center_id(
+    db,
+    company_id: int,
+    cost_center_raw: str | None,
+) -> str | None:
+    """
+    Resolve nome do centro de custo (planilha) → UUID do CA via tabela de mapeamento.
+    Retorna None se não informado ou mapeamento não encontrado (não bloqueia envio).
+    """
+    if not cost_center_raw:
+        return None
+    key = cost_center_raw.strip().upper()
+    row = db.query(CompanyCostCenter).filter(
+        CompanyCostCenter.company_id == company_id,
+        CompanyCostCenter.name_key == key,
+    ).first()
+    if row:
+        return row.ca_cost_center_id
+    print(f"[SALES] Centro de custo '{key}' sem mapeamento configurado — omitindo do payload")
+    return None
+
+
 @router.get("/sales")
 def list_sales(company_id: int | None = None, batch_id: int | None = None, status: str | None = None):
     db: Session = SessionLocal()
@@ -128,6 +151,11 @@ def send_to_ca(sale_id: int):
 
         numero = client.get_next_sale_number()
         financial_account_id = _get_financial_account_id(db, company, sale.payment_method)
+
+        # Resolve centro de custo: texto da planilha → UUID do CA
+        raw_cc = getattr(sale, "cost_center_id", None)
+        resolved_cc = _resolve_cost_center_id(db, company.id, raw_cc)
+        sale.cost_center_id = resolved_cc  # substitui texto pelo UUID (ou None)
 
         # Injeta status configurável na venda antes de montar payload
         sale._ca_sale_status = getattr(company, "ca_sale_status", None) or "EM_ANDAMENTO"
@@ -226,6 +254,10 @@ def send_batch_to_ca(batch_id: int):
 
                 numero = client.get_next_sale_number()
                 financial_account_id = _get_financial_account_id(db, company, sale.payment_method)
+
+                # Resolve centro de custo: texto → UUID
+                raw_cc = getattr(sale, "cost_center_id", None)
+                sale.cost_center_id = _resolve_cost_center_id(db, company_id, raw_cc)
 
                 # Injeta status configurável
                 sale._ca_sale_status = ca_sale_status

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.db.models import Company, CompanyPaymentAccount
+from app.db.models import Company, CompanyPaymentAccount, CompanyCostCenter
 from app.services.conta_azul_client import ContaAzulClient
 
 router = APIRouter(tags=["companies"])
@@ -302,6 +302,72 @@ def delete_payment_account(company_id: int, payment_method_key: str):
         if not mapping:
             raise HTTPException(status_code=404, detail="Mapeamento não encontrado")
         db.delete(mapping)
+        db.commit()
+        return {"ok": True, "deleted": key}
+    finally:
+        db.close()
+
+
+# ── CENTRO DE CUSTO ─────────────────────────────────────────────────────────
+
+@router.get("/companies/{company_id}/cost-centers")
+def list_cost_centers(company_id: int):
+    db: Session = SessionLocal()
+    try:
+        rows = db.query(CompanyCostCenter).filter(
+            CompanyCostCenter.company_id == company_id).all()
+        return [{"name_key": r.name_key, "label": r.label,
+                 "ca_cost_center_id": r.ca_cost_center_id} for r in rows]
+    finally:
+        db.close()
+
+
+@router.post("/companies/{company_id}/cost-centers")
+def set_cost_center(
+    company_id: int,
+    name_key: str = Body(..., embed=True),
+    ca_cost_center_id: str = Body(..., embed=True),
+    label: Optional[str] = Body(None, embed=True),
+):
+    key = name_key.strip().upper()
+    if not key:
+        raise HTTPException(status_code=400, detail="name_key não pode ser vazio")
+    if len(ca_cost_center_id.strip()) != 36:
+        raise HTTPException(status_code=400, detail="ca_cost_center_id deve ser UUID com 36 caracteres")
+
+    db: Session = SessionLocal()
+    try:
+        existing = db.query(CompanyCostCenter).filter(
+            CompanyCostCenter.company_id == company_id,
+            CompanyCostCenter.name_key == key).first()
+        if existing:
+            existing.ca_cost_center_id = ca_cost_center_id.strip()
+            existing.label = label or key
+            db.add(existing)
+        else:
+            db.add(CompanyCostCenter(
+                company_id=company_id,
+                name_key=key,
+                label=label or key,
+                ca_cost_center_id=ca_cost_center_id.strip(),
+            ))
+        db.commit()
+        return {"ok": True, "name_key": key, "ca_cost_center_id": ca_cost_center_id.strip()}
+    finally:
+        db.close()
+
+
+@router.delete("/companies/{company_id}/cost-centers/{name_key}")
+def delete_cost_center(company_id: int, name_key: str):
+    key = name_key.strip().upper()
+    db: Session = SessionLocal()
+    try:
+        row = db.query(CompanyCostCenter).filter(
+            CompanyCostCenter.company_id == company_id,
+            CompanyCostCenter.name_key == key).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Mapeamento não encontrado")
+        db.delete(row)
         db.commit()
         return {"ok": True, "deleted": key}
     finally:
