@@ -67,7 +67,7 @@ def create_sales_from_records(
 
     Campos opcionais lidos da planilha (se coluna existir e estiver preenchida):
       - NUMERO_VENDA  → sale.sale_number   (senão usa get_next_sale_number() no envio ao CA)
-      - DESCONTO      → sale.discount_amount em R$ (senão não envia desconto ao CA)
+      - DESCONTO      → sale.discount_amount em R$ (soma de todas as linhas do grupo)
       - CENTRO_CUSTO  → sale.cost_center_id UUID do CA (senão não envia centro de custo)
 
     group_mode da empresa:
@@ -140,10 +140,17 @@ def create_sales_from_records(
         payment_terms = first["CONDICAO DE PAGAMENTO"]
         receiving_account = first["CONTA DE RECEBIMENTO"]
 
-        # Campos opcionais — lidos se coluna existir e estiver preenchida
+        # Campos opcionais
         sale_number = _to_str_or_none(first.get("NUMERO_VENDA"))
-        discount_amount = _to_decimal_or_none(first.get("DESCONTO"))
         cost_center_id = _to_str_or_none(first.get("CENTRO_CUSTO"))
+
+        # Desconto: soma de todas as linhas do grupo
+        discount_total = Decimal("0")
+        for r in rows:
+            d = _to_decimal_or_none(r.get("DESCONTO"))
+            if d is not None:
+                discount_total += d
+        discount_amount = discount_total if discount_total > 0 else None
 
         if has_error:
             status = "ERRO"
