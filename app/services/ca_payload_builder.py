@@ -99,8 +99,13 @@ def build_ca_payload(sale, product_uuid_map: dict | None = None) -> Dict:
             dval = float(str(discount))  # str() garante conversão correta de Decimal ORM
             print(f"[PAYLOAD] discount float: {dval}")
             if not math.isnan(dval) and dval > 0:
-                payload["desconto"] = dval
-                print(f"[PAYLOAD] desconto incluído no payload: {dval}")
+                payload["composicao_de_valor"] = {
+                    "desconto": {
+                        "tipo": "VALOR",
+                        "valor": dval
+                    }
+                }
+                print(f"[PAYLOAD] desconto incluído no payload (composicao_de_valor): {dval}")
         except Exception as e:
             print(f"[PAYLOAD] erro ao converter desconto: {e}")
 
@@ -109,4 +114,5 @@ def build_ca_payload(sale, product_uuid_map: dict | None = None) -> Dict:
     if cost_center:
         payload["id_centro_custo"] = cost_center
 
+    print(f"[PAYLOAD] payload completo enviado ao CA: {payload}")
     return payload
