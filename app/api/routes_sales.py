@@ -82,7 +82,6 @@ def _resolve_product_uuids(
     return uuid_map
 
 
-
 def _resolve_cost_center_id(
     db,
     company_id: int,
@@ -105,7 +104,6 @@ def _resolve_cost_center_id(
     return None
 
 
-
 def _resolve_category_id(db, company_id: int, category_raw: str | None) -> str | None:
     """
     Resolve nome da categoria (planilha) → UUID do CA via tabela de mapeamento.
@@ -122,6 +120,19 @@ def _resolve_category_id(db, company_id: int, category_raw: str | None) -> str |
         return row.ca_category_id
     print(f"[SALES] Categoria '{key}' sem mapeamento configurado — omitindo do payload")
     return None
+
+
+def _get_numero(sale, client) -> int:
+    """
+    Prioridade: número da planilha (sale.sale_number) → próximo número do CA.
+    """
+    numero = getattr(sale, "sale_number", None)
+    if numero:
+        try:
+            return int(numero)
+        except Exception:
+            print(f"[SALES] sale_number '{numero}' não é inteiro válido — usando próximo do CA")
+    return client.get_next_sale_number()
 
 
 @router.get("/sales")
@@ -179,7 +190,9 @@ def send_to_ca(sale_id: int):
         item_type = getattr(company, "item_type", None) or "servico"
         product_uuid_map = _resolve_product_uuids(db, client, company.id, items, item_type=item_type)
 
-        numero = client.get_next_sale_number()
+        # Número da venda: prioriza o da planilha, senão usa próximo do CA
+        numero = _get_numero(sale, client)
+
         financial_account_id = _get_financial_account_id(db, company, sale.payment_method)
 
         # Resolve centro de custo: texto → UUID
@@ -296,7 +309,9 @@ def send_batch_to_ca(batch_id: int):
                 # Resolve UUIDs dos produtos para esta venda
                 product_uuid_map = _resolve_product_uuids(db, client, company_id, items, item_type=item_type)
 
-                numero = client.get_next_sale_number()
+                # Número da venda: prioriza o da planilha, senão usa próximo do CA
+                numero = _get_numero(sale, client)
+
                 financial_account_id = _get_financial_account_id(db, company, sale.payment_method)
 
                 # Resolve centro de custo: texto → UUID
