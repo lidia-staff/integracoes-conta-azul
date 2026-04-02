@@ -130,6 +130,7 @@ def get_company(company_id: int):
             "ca_sale_status": getattr(c, "ca_sale_status", "EM_ANDAMENTO") or "EM_ANDAMENTO",
             "item_type": getattr(c, "item_type", "servico") or "servico",
             "asaas_enabled": bool(getattr(c, "asaas_enabled", False)),
+            "upload_enabled": bool(getattr(c, "upload_enabled", True)),
         }
     finally:
         db.close()
@@ -148,6 +149,7 @@ def update_company(
     ca_sale_status: Optional[str] = Body(None, embed=True),
     item_type: Optional[str] = Body(None, embed=True),
     asaas_enabled: Optional[bool] = Body(None, embed=True),
+    upload_enabled: Optional[bool] = Body(None, embed=True),
 ):
     db: Session = SessionLocal()
     try:
@@ -184,6 +186,8 @@ def update_company(
             c.item_type = item_type
         if asaas_enabled is not None:
             c.asaas_enabled = asaas_enabled
+        if upload_enabled is not None:
+            c.upload_enabled = upload_enabled
         db.add(c)
         db.commit()
         db.refresh(c)

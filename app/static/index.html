@@ -133,10 +133,10 @@
       <div class="nav-item active" onclick="showPage('dashboard')">
         <span class="nav-icon">📊</span> Dashboard
       </div>
-      <div class="nav-item" onclick="showPage('upload')">
+      <div id="nav-upload" class="nav-item" onclick="showPage('upload')">
         <span class="nav-icon">📤</span> Upload
       </div>
-      <div class="nav-item" onclick="showPage('batches')">
+      <div id="nav-lotes" class="nav-item" onclick="showPage('batches')">
         <span class="nav-icon">📦</span> Lotes
       </div>
       <div class="nav-item" onclick="showPage('config')">
@@ -612,6 +612,11 @@ async function refreshAsaasNavVisibility() {
     const c = await res.json();
     const navAsaas = document.getElementById('nav-asaas');
     if (navAsaas) navAsaas.style.display = c.asaas_enabled ? '' : 'none';
+    const uploadEnabled = c.upload_enabled !== false;
+    const navUpload = document.getElementById('nav-upload');
+    const navLotes = document.getElementById('nav-lotes');
+    if (navUpload) navUpload.style.display = uploadEnabled ? '' : 'none';
+    if (navLotes) navLotes.style.display = uploadEnabled ? '' : 'none';
   } catch(_) {}
 }
 

@@ -82,6 +82,7 @@ def run_schema_migrations():
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS ca_sale_status VARCHAR(30) DEFAULT 'EM_ANDAMENTO';",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS item_type VARCHAR(20) DEFAULT 'servico';",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS asaas_enabled BOOLEAN DEFAULT FALSE;",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS upload_enabled BOOLEAN DEFAULT TRUE;",
         # Sales
         "ALTER TABLE sales ADD COLUMN IF NOT EXISTS sale_number VARCHAR(50);",
         "ALTER TABLE sales ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2);",

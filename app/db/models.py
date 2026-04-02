@@ -23,6 +23,7 @@ class Company(Base):
     item_type = Column(String(20), nullable=True, default="servico")
     # item_type: servico | produto
     asaas_enabled = Column(Boolean, default=False)
+    upload_enabled = Column(Boolean, default=True)
     batches = relationship("UploadBatch", back_populates="company", cascade="all, delete-orphan")
     sales = relationship("Sale", back_populates="company", cascade="all, delete-orphan")
     customers = relationship("CompanyCustomer", back_populates="company", cascade="all, delete-orphan")
