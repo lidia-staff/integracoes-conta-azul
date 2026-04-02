@@ -245,6 +245,24 @@
         <p>Configure contas financeiras por forma de pagamento</p>
       </div>
 
+      <!-- Módulos -->
+      <div class="card">
+        <div class="card-title">🧩 Módulos Ativos</div>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:14px">Define quais funcionalidades este cliente tem acesso no painel.</p>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="modUploadToggle" style="accent-color:var(--accent);width:15px;height:15px">
+            <span><strong>Input de Vendas</strong> — upload de planilhas → Conta Azul</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="modAsaasToggle" style="accent-color:var(--accent);width:15px;height:15px">
+            <span><strong>Integração Asaas</strong> — pagamentos Asaas → Conta Azul</span>
+          </label>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveModules()">Salvar Módulos</button>
+        <div id="moduleSaveStatus" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+      </div>
+
       <!-- Contas disponíveis -->
       <div class="card">
         <div class="card-title">Contas Financeiras no Conta Azul</div>
@@ -549,7 +567,7 @@ function showPage(page) {
   
   if (page === 'dashboard') loadDashboard();
   if (page === 'batches') loadBatches();
-  if (page === 'config') { loadCAAccounts(); loadPaymentMappings(); loadDefaultAccount(); loadGroupMode(); loadPinStatus(); loadCostCenters(); loadCategories(); }
+  if (page === 'config') { loadModules(); loadCAAccounts(); loadPaymentMappings(); loadDefaultAccount(); loadGroupMode(); loadPinStatus(); loadCostCenters(); loadCategories(); }
   if (page === 'asaas') { loadAsaasCredentials(); updateAsaasWebhookUrl(); }
 }
 
@@ -1136,6 +1154,45 @@ async function deleteMapping(key) {
 function doOAuth() {
   if (!currentCompanyId) return toast('Selecione uma empresa', 'error');
   window.open(`/api/contaazul/start?company_id=${currentCompanyId}`, '_blank');
+}
+
+// ─── MÓDULOS ──────────────────────────────────────────────────────
+async function loadModules() {
+  if (!currentCompanyId) return;
+  try {
+    const res = await fetch(`${API}/v1/companies/${currentCompanyId}`);
+    const data = await res.json();
+    document.getElementById('modUploadToggle').checked = data.upload_enabled !== false;
+    document.getElementById('modAsaasToggle').checked = !!data.asaas_enabled;
+    document.getElementById('moduleSaveStatus').textContent = '';
+  } catch(_) {}
+}
+
+async function saveModules() {
+  if (!currentCompanyId) return;
+  const upload_enabled = document.getElementById('modUploadToggle').checked;
+  const asaas_enabled = document.getElementById('modAsaasToggle').checked;
+  const statusEl = document.getElementById('moduleSaveStatus');
+  if (!upload_enabled && !asaas_enabled) {
+    statusEl.textContent = '⚠️ Selecione ao menos um módulo.';
+    statusEl.style.color = 'var(--warn)';
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/v1/companies/${currentCompanyId}`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({upload_enabled, asaas_enabled})
+    });
+    if (!res.ok) throw new Error('Erro ao salvar');
+    statusEl.textContent = '✅ Módulos salvos!';
+    statusEl.style.color = 'var(--accent)';
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    refreshAsaasNavVisibility();
+  } catch(e) {
+    statusEl.textContent = '❌ ' + e.message;
+    statusEl.style.color = 'var(--danger)';
+  }
 }
 
 // ─── GROUP MODE ───────────────────────────────────────────────────
