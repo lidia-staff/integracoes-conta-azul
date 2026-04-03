@@ -48,3 +48,24 @@ class AsaasClient:
     def get_customer(self, customer_id: str) -> dict:
         """GET /customers/{id} — dados do cliente Asaas."""
         return self._request("GET", f"/customers/{customer_id}")
+
+    # ── Webhooks ──────────────────────────────────────────────────────
+
+    def list_webhooks(self) -> list:
+        """GET /webhooks — lista webhooks registrados na conta."""
+        data = self._request("GET", "/webhooks")
+        return data.get("data", [])
+
+    def create_webhook(self, url: str, events: list) -> dict:
+        """POST /webhooks — registra webhook para os eventos indicados."""
+        payload = {
+            "url": url,
+            "enabled": True,
+            "interrupted": False,
+            "events": events,
+        }
+        return self._request("POST", "/webhooks", json=payload)
+
+    def delete_webhook(self, webhook_id: str) -> dict:
+        """DELETE /webhooks/{id} — remove webhook existente."""
+        return self._request("DELETE", f"/webhooks/{webhook_id}")

@@ -1,10 +1,49 @@
+import os
+import logging
 from typing import Optional
+from urllib.parse import urlparse
 from fastapi import APIRouter, Body, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.db.models import Company, AsaasCredential, AsaasExecutionLog
 from app.services.asaas_client import AsaasClient
+
+logger = logging.getLogger(__name__)
+
+WEBHOOK_EVENTS = ["PAYMENT_RECEIVED", "PAYMENT_CONFIRMED"]
+
+
+def _get_app_base_url() -> str:
+    """Deriva a URL base da aplicação a partir de APP_BASE_URL ou CA_REDIRECT_URI."""
+    base = os.getenv("APP_BASE_URL", "").rstrip("/")
+    if base:
+        return base
+    redirect_uri = os.getenv("CA_REDIRECT_URI", "")
+    if redirect_uri:
+        parsed = urlparse(redirect_uri)
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return ""
+
+
+def _auto_register_webhook(client: AsaasClient, company_id: int):
+    """Registra o webhook no Asaas automaticamente, removendo duplicatas."""
+    base_url = _get_app_base_url()
+    if not base_url:
+        logger.warning("[ASAAS_WEBHOOK] APP_BASE_URL não configurada — webhook não registrado")
+        return
+    webhook_url = f"{base_url}/asaas/webhook/{company_id}"
+    try:
+        existing = client.list_webhooks()
+        for wh in existing:
+            if wh.get("url", "") == webhook_url:
+                logger.info(f"[ASAAS_WEBHOOK] Webhook já existe para company {company_id}, atualizando")
+                client.delete_webhook(wh["id"])
+                break
+        client.create_webhook(webhook_url, WEBHOOK_EVENTS)
+        logger.info(f"[ASAAS_WEBHOOK] Webhook registrado: {webhook_url}")
+    except Exception as e:
+        logger.error(f"[ASAAS_WEBHOOK] Falha ao registrar webhook: {e}")
 
 router = APIRouter(tags=["asaas"])
 
@@ -53,6 +92,9 @@ def upsert_asaas_credentials(
             db.add(cred)
         db.commit()
         db.refresh(cred)
+        # Registra webhook automaticamente no Asaas
+        client = AsaasClient(api_key=cred.api_key, environment=cred.environment)
+        _auto_register_webhook(client, company_id)
         return {"ok": True, "environment": cred.environment, "created_at": cred.created_at}
     finally:
         db.close()
