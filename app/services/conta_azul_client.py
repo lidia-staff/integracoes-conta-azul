@@ -371,6 +371,22 @@ class ContaAzulClient:
         }
         return self._request("POST", "/v1/servicos", json=payload, timeout=30)
 
+    # ── Asaas: contas a receber ──────────────────────────────────────
+
+    def create_receivable(self, payload: dict) -> dict:
+        """Cria conta a receber no Conta Azul. POST /v1/conta-a-receber"""
+        return self._request("POST", "/v1/conta-a-receber", json=payload, timeout=30)
+
+    def get_receivable(self, receivable_id: str) -> dict:
+        """Busca conta a receber pelo ID. GET /v1/conta-a-receber/{id}"""
+        return self._request("GET", f"/v1/conta-a-receber/{receivable_id}", timeout=30)
+
+    def mark_receivable_paid(self, receivable_id: str, value: float, payment_date: str) -> dict:
+        """Baixa (marca como pago) uma conta a receber. PATCH /v1/conta-a-receber/{id}/receber"""
+        payload = {"valor": value, "data_pagamento": payment_date}
+        return self._request("PATCH", f"/v1/conta-a-receber/{receivable_id}/receber",
+                             json=payload, timeout=30)
+
     # ── Dashboard: lançamentos financeiros ──────────────────────────
 
     def list_transactions(

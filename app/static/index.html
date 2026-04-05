@@ -133,14 +133,17 @@
       <div class="nav-item active" onclick="showPage('dashboard')">
         <span class="nav-icon">📊</span> Dashboard
       </div>
-      <div class="nav-item" onclick="showPage('upload')">
+      <div id="nav-upload" class="nav-item" onclick="showPage('upload')">
         <span class="nav-icon">📤</span> Upload
       </div>
-      <div class="nav-item" onclick="showPage('batches')">
+      <div id="nav-lotes" class="nav-item" onclick="showPage('batches')">
         <span class="nav-icon">📦</span> Lotes
       </div>
       <div class="nav-item" onclick="showPage('config')">
         <span class="nav-icon">⚙️</span> Configurações
+      </div>
+      <div id="nav-asaas" class="nav-item" onclick="showPage('asaas')" style="display:none">
+        <span class="nav-icon">💰</span> Asaas
       </div>
     </nav>
     <div class="company-selector" id="companySelectorWrap">
@@ -240,6 +243,24 @@
       <div class="page-header">
         <h2>Configurações</h2>
         <p>Configure contas financeiras por forma de pagamento</p>
+      </div>
+
+      <!-- Módulos -->
+      <div class="card">
+        <div class="card-title">🧩 Módulos Ativos</div>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:14px">Define quais funcionalidades este cliente tem acesso no painel.</p>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="modUploadToggle" style="accent-color:var(--accent);width:15px;height:15px">
+            <span><strong>Input de Vendas</strong> — upload de planilhas → Conta Azul</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="modAsaasToggle" style="accent-color:var(--accent);width:15px;height:15px">
+            <span><strong>Integração Asaas</strong> — pagamentos Asaas → Conta Azul</span>
+          </label>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveModules()">Salvar Módulos</button>
+        <div id="moduleSaveStatus" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
       </div>
 
       <!-- Contas disponíveis -->
@@ -411,6 +432,79 @@
       </div>
     </div>
 
+    <!-- ASAAS -->
+    <div id="page-asaas" class="page">
+      <div class="page-header">
+        <h2>Asaas</h2>
+        <p>Integração automática: pagamentos recebidos no Asaas → Conta Azul</p>
+      </div>
+
+      <!-- Credenciais -->
+      <div class="card">
+        <div class="card-title">🔑 Credenciais Asaas</div>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
+          A API Key é encontrada em <strong>Conta &gt; Configurações &gt; Integrações</strong> no painel do Asaas.
+        </p>
+        <div class="form-group">
+          <label>API Key</label>
+          <input type="password" id="asaasApiKey" placeholder="$aas_..." style="font-family:'DM Mono',monospace;font-size:13px">
+        </div>
+        <div class="form-group">
+          <label>Ambiente</label>
+          <select id="asaasEnv">
+            <option value="production">Production</option>
+            <option value="sandbox">Sandbox (testes)</option>
+          </select>
+        </div>
+        <div class="btn-group" style="margin-top:8px">
+          <button class="btn btn-primary btn-sm" onclick="saveAsaasCredentials()">💾 Salvar</button>
+          <button class="btn btn-secondary btn-sm" onclick="pingAsaas()">🔌 Testar conexão</button>
+        </div>
+        <div id="asaasCredStatus" style="margin-top:10px;font-size:12px;color:var(--muted)"></div>
+      </div>
+
+      <!-- Instruções webhook -->
+      <div class="card">
+        <div class="card-title">📡 URL do Webhook</div>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:10px">
+          Configure esta URL no painel do Asaas em <strong>Configurações &gt; Notificações &gt; Webhook</strong>.<br>
+          Eventos: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">PAYMENT_RECEIVED</code> e <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">PAYMENT_CONFIRMED</code>
+        </p>
+        <div id="asaasWebhookUrl" style="font-family:'DM Mono',monospace;font-size:12px;background:var(--surface2);padding:10px 14px;border-radius:var(--radius);border:1px solid var(--border);word-break:break-all;color:var(--accent)">
+          — selecione uma empresa —
+        </div>
+      </div>
+
+      <!-- O que acontece -->
+      <div class="card">
+        <div class="card-title">⚡ O que acontece automaticamente</div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="color:var(--accent);font-size:18px">1</span>
+            <span>Pagamento recebido no Asaas → <strong>cliente criado/atualizado no Conta Azul</strong></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="color:var(--accent);font-size:18px">2</span>
+            <span>Conta a receber <strong>criada no Conta Azul</strong> com valor e vencimento corretos</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="color:var(--accent);font-size:18px">3</span>
+            <span>Conta a receber <strong>baixada como paga</strong> na data do pagamento</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Logs -->
+      <div class="card">
+        <div class="card-title">📋 Últimas Execuções</div>
+        <button class="btn btn-secondary btn-sm" onclick="loadAsaasLogs()" style="margin-bottom:14px">🔄 Atualizar</button>
+        <div id="asaasLogsContainer">
+          <div style="color:var(--muted);font-size:13px">Clique em Atualizar para carregar os logs.</div>
+        </div>
+      </div>
+
+    </div>
+
   </main>
 </div>
 
@@ -473,7 +567,8 @@ function showPage(page) {
   
   if (page === 'dashboard') loadDashboard();
   if (page === 'batches') loadBatches();
-  if (page === 'config') { loadCAAccounts(); loadPaymentMappings(); loadDefaultAccount(); loadGroupMode(); loadPinStatus(); loadCostCenters(); loadCategories(); }
+  if (page === 'config') { loadModules(); loadCAAccounts(); loadPaymentMappings(); loadDefaultAccount(); loadGroupMode(); loadPinStatus(); loadCostCenters(); loadCategories(); }
+  if (page === 'asaas') { loadAsaasCredentials(); updateAsaasWebhookUrl(); }
 }
 
 // ─── COMPANY ──────────────────────────────────────────────────────
@@ -515,6 +610,7 @@ async function loadCompanies() {
       fixed.textContent = company ? company.name : '';
     }
     loadDashboard();
+    refreshAsaasNavVisibility();
   } catch(e) {
     toast('Erro ao carregar empresas', 'error');
   }
@@ -523,6 +619,23 @@ async function loadCompanies() {
 function onCompanyChange() {
   currentCompanyId = document.getElementById('companySelect').value;
   loadDashboard();
+  updateAsaasWebhookUrl();
+  refreshAsaasNavVisibility();
+}
+
+async function refreshAsaasNavVisibility() {
+  if (!currentCompanyId) return;
+  try {
+    const res = await fetch(`${API}/v1/companies/${currentCompanyId}`);
+    const c = await res.json();
+    const navAsaas = document.getElementById('nav-asaas');
+    if (navAsaas) navAsaas.style.display = c.asaas_enabled ? '' : 'none';
+    const uploadEnabled = c.upload_enabled !== false;
+    const navUpload = document.getElementById('nav-upload');
+    const navLotes = document.getElementById('nav-lotes');
+    if (navUpload) navUpload.style.display = uploadEnabled ? '' : 'none';
+    if (navLotes) navLotes.style.display = uploadEnabled ? '' : 'none';
+  } catch(_) {}
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────
@@ -1043,6 +1156,45 @@ function doOAuth() {
   window.open(`/api/contaazul/start?company_id=${currentCompanyId}`, '_blank');
 }
 
+// ─── MÓDULOS ──────────────────────────────────────────────────────
+async function loadModules() {
+  if (!currentCompanyId) return;
+  try {
+    const res = await fetch(`${API}/v1/companies/${currentCompanyId}`);
+    const data = await res.json();
+    document.getElementById('modUploadToggle').checked = data.upload_enabled !== false;
+    document.getElementById('modAsaasToggle').checked = !!data.asaas_enabled;
+    document.getElementById('moduleSaveStatus').textContent = '';
+  } catch(_) {}
+}
+
+async function saveModules() {
+  if (!currentCompanyId) return;
+  const upload_enabled = document.getElementById('modUploadToggle').checked;
+  const asaas_enabled = document.getElementById('modAsaasToggle').checked;
+  const statusEl = document.getElementById('moduleSaveStatus');
+  if (!upload_enabled && !asaas_enabled) {
+    statusEl.textContent = '⚠️ Selecione ao menos um módulo.';
+    statusEl.style.color = 'var(--warn)';
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/v1/companies/${currentCompanyId}`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({upload_enabled, asaas_enabled})
+    });
+    if (!res.ok) throw new Error('Erro ao salvar');
+    statusEl.textContent = '✅ Módulos salvos!';
+    statusEl.style.color = 'var(--accent)';
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    refreshAsaasNavVisibility();
+  } catch(e) {
+    statusEl.textContent = '❌ ' + e.message;
+    statusEl.style.color = 'var(--danger)';
+  }
+}
+
 // ─── GROUP MODE ───────────────────────────────────────────────────
 async function loadGroupMode() {
   if (!currentCompanyId) return;
@@ -1286,6 +1438,118 @@ async function removePin() {
     loadPinStatus();
   } catch(e) {
     toast('Erro ao remover PIN', 'error');
+  }
+}
+
+// ─── ASAAS ────────────────────────────────────────────────────────
+function updateAsaasWebhookUrl() {
+  const urlEl = document.getElementById('asaasWebhookUrl');
+  if (!currentCompanyId) { urlEl.textContent = '— selecione uma empresa —'; return; }
+  urlEl.textContent = `${window.location.origin}/asaas/webhook/${currentCompanyId}`;
+}
+
+async function loadAsaasCredentials() {
+  if (!currentCompanyId) return;
+  const statusEl = document.getElementById('asaasCredStatus');
+  try {
+    const res = await fetch(`${API}/v1/companies/${currentCompanyId}/asaas/credentials`);
+    const data = await res.json();
+    if (data.has_key) {
+      const env = data.environment === 'sandbox' ? 'Sandbox' : 'Production';
+      statusEl.innerHTML = `<span style="color:var(--accent)">● Credencial configurada</span> · ${env} · atualizada ${new Date(data.updated_at).toLocaleDateString('pt-BR')}`;
+      document.getElementById('asaasEnv').value = data.environment || 'production';
+      document.getElementById('asaasApiKey').placeholder = '(chave salva — preencha para alterar)';
+    } else {
+      statusEl.innerHTML = '<span style="color:var(--warn)">● Sem credencial configurada</span>';
+    }
+  } catch(e) {
+    statusEl.textContent = 'Erro ao verificar credencial';
+  }
+}
+
+async function saveAsaasCredentials() {
+  if (!currentCompanyId) return toast('Selecione uma empresa', 'error');
+  const apiKey = document.getElementById('asaasApiKey').value.trim();
+  const env = document.getElementById('asaasEnv').value;
+  if (!apiKey) return toast('Informe a API Key', 'error');
+  try {
+    const res = await fetch(`${API}/v1/companies/${currentCompanyId}/asaas/credentials`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, environment: env }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Erro');
+    toast('Credencial salva!', 'success');
+    document.getElementById('asaasApiKey').value = '';
+    loadAsaasCredentials();
+  } catch(e) {
+    toast('Erro ao salvar: ' + e.message, 'error');
+  }
+}
+
+async function pingAsaas() {
+  if (!currentCompanyId) return toast('Selecione uma empresa', 'error');
+  const statusEl = document.getElementById('asaasCredStatus');
+  statusEl.innerHTML = '<span style="color:var(--muted)">Testando conexão...</span>';
+  try {
+    const res = await fetch(`${API}/v1/companies/${currentCompanyId}/asaas/ping`);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Falha na conexão');
+    }
+    const data = await res.json();
+    const name = data.account?.name || data.account?.tradingName || 'Conta conectada';
+    statusEl.innerHTML = `<span style="color:var(--accent)">✓ Conectado</span> · ${name}`;
+    toast('Conexão OK: ' + name, 'success');
+  } catch(e) {
+    statusEl.innerHTML = `<span style="color:var(--danger)">✗ Falha</span> · ${e.message}`;
+    toast('Falha na conexão: ' + e.message, 'error');
+  }
+}
+
+async function loadAsaasLogs() {
+  if (!currentCompanyId) return toast('Selecione uma empresa', 'error');
+  const container = document.getElementById('asaasLogsContainer');
+  container.innerHTML = '<div style="color:var(--muted);font-size:13px">Carregando...</div>';
+  try {
+    const res = await fetch(`${API}/v1/companies/${currentCompanyId}/asaas/logs?limit=20`);
+    const logs = await res.json();
+    if (!logs.length) {
+      container.innerHTML = '<div style="color:var(--muted);font-size:13px">Nenhuma execução registrada ainda.</div>';
+      return;
+    }
+    container.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="color:var(--muted);text-align:left;border-bottom:1px solid var(--border)">
+            <th style="padding:6px 8px">Payment ID</th>
+            <th style="padding:6px 8px">Status</th>
+            <th style="padding:6px 8px">Cliente CA</th>
+            <th style="padding:6px 8px">Recebível CA</th>
+            <th style="padding:6px 8px">Data</th>
+            <th style="padding:6px 8px">ms</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${logs.map(l => `
+            <tr style="border-bottom:1px solid var(--border)" title="${l.error_detail || ''}">
+              <td style="padding:6px 8px;font-family:'DM Mono',monospace">${l.asaas_payment_id || '—'}</td>
+              <td style="padding:6px 8px">
+                ${l.status === 'success' ? '<span style="color:var(--accent)">✓ success</span>'
+                  : l.status === 'skipped' ? '<span style="color:var(--muted)">⟳ skipped</span>'
+                  : '<span style="color:var(--danger)">✗ error</span>'}
+              </td>
+              <td style="padding:6px 8px;font-family:'DM Mono',monospace;font-size:11px">${l.ca_customer_id ? l.ca_customer_id.slice(0,8)+'…' : '—'}</td>
+              <td style="padding:6px 8px;font-family:'DM Mono',monospace;font-size:11px">${l.ca_receivable_id ? l.ca_receivable_id.slice(0,8)+'…' : '—'}</td>
+              <td style="padding:6px 8px;color:var(--muted)">${new Date(l.created_at).toLocaleString('pt-BR')}</td>
+              <td style="padding:6px 8px;color:var(--muted)">${l.duration_ms ?? '—'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      ${logs.some(l => l.status === 'error') ? `<p style="margin-top:10px;font-size:11px;color:var(--muted)">💡 Passe o mouse sobre linhas com erro para ver o detalhe.</p>` : ''}
+    `;
+  } catch(e) {
+    container.innerHTML = `<div style="color:var(--danger);font-size:13px">Erro ao carregar logs: ${e.message}</div>`;
   }
 }
 

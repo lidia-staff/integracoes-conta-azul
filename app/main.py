@@ -8,6 +8,8 @@ from app.api.routes_sales import router as sales_router
 from app.api.routes_companies import router as companies_router
 from app.api.routes_oauth import router as oauth_router
 from app.api.routes_dashboard import router as dashboard_router
+from app.api.routes_asaas import router as asaas_router
+from app.api.routes_asaas_webhook import router as asaas_webhook_router
 
 from app.db.session import Base, engine
 from app.db import models  # noqa: F401
@@ -20,6 +22,8 @@ app.include_router(sales_router, prefix="/v1")
 app.include_router(companies_router, prefix="/v1")
 app.include_router(oauth_router)
 app.include_router(dashboard_router)
+app.include_router(asaas_router, prefix="/v1")
+app.include_router(asaas_webhook_router)
 
 
 @app.get("/debug/env")
@@ -114,6 +118,8 @@ def run_schema_migrations():
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS group_mode VARCHAR(20) DEFAULT 'grouped';",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS ca_sale_status VARCHAR(30) DEFAULT 'EM_ANDAMENTO';",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS item_type VARCHAR(20) DEFAULT 'servico';",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS asaas_enabled BOOLEAN DEFAULT FALSE;",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS upload_enabled BOOLEAN DEFAULT TRUE;",
         # Sales
         "ALTER TABLE sales ADD COLUMN IF NOT EXISTS sale_number VARCHAR(50);",
         "ALTER TABLE sales ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2);",
@@ -160,7 +166,39 @@ def run_schema_migrations():
             created_at TIMESTAMP DEFAULT NOW(),
             CONSTRAINT uq_company_cost_center_key UNIQUE (company_id, name_key)
         );""",
-        # ── Dashboard tables ────────────────────────────────────────
+        # ── Asaas integration tables ─────────────────────────────────
+        """CREATE TABLE IF NOT EXISTS asaas_credentials (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            api_key TEXT NOT NULL,
+            environment VARCHAR(20) DEFAULT 'production',
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT uq_asaas_credential_company UNIQUE (company_id)
+        );""",
+        """CREATE TABLE IF NOT EXISTS asaas_processed_events (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            asaas_payment_id VARCHAR(100) NOT NULL,
+            status VARCHAR(20) NOT NULL,
+            error_detail TEXT,
+            processed_at TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT uq_asaas_processed UNIQUE (company_id, asaas_payment_id)
+        );""",
+        """CREATE TABLE IF NOT EXISTS asaas_execution_logs (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            asaas_payment_id VARCHAR(100),
+            status VARCHAR(20) NOT NULL,
+            ca_customer_id VARCHAR(100),
+            ca_receivable_id VARCHAR(100),
+            error_detail TEXT,
+            payload_summary TEXT,
+            duration_ms INTEGER,
+            created_at TIMESTAMP DEFAULT NOW()
+        );""",
+        "CREATE INDEX IF NOT EXISTS ix_asaas_exec_logs_company ON asaas_execution_logs(company_id, created_at DESC);",
+        # ── Dashboard tables ─────────────────────────────────────────
         """CREATE TABLE IF NOT EXISTS dash_partners (
             id SERIAL PRIMARY KEY,
             name VARCHAR(200) NOT NULL,

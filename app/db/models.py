@@ -22,6 +22,8 @@ class Company(Base):
     # ca_sale_status: EM_ANDAMENTO | APROVADO | CONCLUIDO
     item_type = Column(String(20), nullable=True, default="servico")
     # item_type: servico | produto
+    asaas_enabled = Column(Boolean, default=False)
+    upload_enabled = Column(Boolean, default=True)
     batches = relationship("UploadBatch", back_populates="company", cascade="all, delete-orphan")
     sales = relationship("Sale", back_populates="company", cascade="all, delete-orphan")
     customers = relationship("CompanyCustomer", back_populates="company", cascade="all, delete-orphan")
@@ -29,6 +31,7 @@ class Company(Base):
     payment_accounts = relationship("CompanyPaymentAccount", back_populates="company", cascade="all, delete-orphan")
     cost_centers = relationship("CompanyCostCenter", back_populates="company", cascade="all, delete-orphan")
     categories = relationship("CompanyCategory", back_populates="company", cascade="all, delete-orphan")
+    asaas_credential = relationship("AsaasCredential", back_populates="company", uselist=False, cascade="all, delete-orphan")
 
 
 class CompanyPaymentAccount(Base):
@@ -140,6 +143,46 @@ class SaleItem(Base):
     unit_price = Column(Numeric(12, 2), nullable=False)
     line_total = Column(Numeric(12, 2), nullable=False)
     sale = relationship("Sale", back_populates="items")
+
+
+class AsaasCredential(Base):
+    __tablename__ = "asaas_credentials"
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, unique=True)
+    api_key = Column(Text, nullable=False)
+    environment = Column(String(20), default="production")  # "production" | "sandbox"
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    company = relationship("Company", back_populates="asaas_credential")
+
+
+class AsaasProcessedEvent(Base):
+    """Tabela de idempotência — evita processar o mesmo pagamento Asaas duas vezes."""
+    __tablename__ = "asaas_processed_events"
+    __table_args__ = (
+        UniqueConstraint("company_id", "asaas_payment_id", name="uq_asaas_processed"),
+    )
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    asaas_payment_id = Column(String(100), nullable=False)
+    status = Column(String(20), nullable=False)  # "ok" | "error" | "skipped"
+    error_detail = Column(Text, nullable=True)
+    processed_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AsaasExecutionLog(Base):
+    """Auditoria de cada execução do fluxo Asaas → CA."""
+    __tablename__ = "asaas_execution_logs"
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    asaas_payment_id = Column(String(100), nullable=True)
+    status = Column(String(20), nullable=False)  # "success" | "error" | "skipped"
+    ca_customer_id = Column(String(100), nullable=True)
+    ca_receivable_id = Column(String(100), nullable=True)
+    error_detail = Column(Text, nullable=True)
+    payload_summary = Column(Text, nullable=True)
+    duration_ms = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class CompanyCustomer(Base):

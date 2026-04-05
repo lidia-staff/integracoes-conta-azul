@@ -27,10 +27,19 @@
                  font-weight: 600; color: var(--muted); transition: all .3s; background: var(--surface); }
   .step-circle.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
   .step-circle.done { border-color: var(--accent); background: var(--accent); color: #000; }
+  .step-circle.skipped { border-color: var(--border); background: var(--surface); color: var(--muted); opacity: .4; }
   .step-label { font-size: 11px; color: var(--muted); text-align: center; max-width: 70px; line-height: 1.3; }
   .step-label.active { color: var(--accent); }
-  .step-line { width: 48px; height: 2px; background: var(--border); margin: 0 4px; margin-bottom: 22px; transition: all .3s; }
+  .step-line { width: 36px; height: 2px; background: var(--border); margin: 0 4px; margin-bottom: 22px; transition: all .3s; }
   .step-line.done { background: var(--accent); }
+  /* MODULES */
+  .module-option { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px;
+                   border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer;
+                   transition: border-color .15s; }
+  .module-option:hover { border-color: var(--accent); }
+  .module-option input[type=checkbox] { margin-top: 2px; accent-color: var(--accent); width:15px; height:15px; flex-shrink:0; }
+  .module-option .mod-title { font-size: 13px; font-weight: 600; }
+  .module-option .mod-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
   /* CARD */
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; }
@@ -118,7 +127,12 @@
     <div class="step-line" id="line3"></div>
     <div class="step-dot">
       <div class="step-circle" id="sc4">4</div>
-      <div class="step-label" id="sl4">Concluído</div>
+      <div class="step-label" id="sl4">Asaas</div>
+    </div>
+    <div class="step-line" id="line4"></div>
+    <div class="step-dot">
+      <div class="step-circle" id="sc5">5</div>
+      <div class="step-label" id="sl5">Concluído</div>
     </div>
   </div>
 
@@ -134,6 +148,25 @@
       <label>Slug da URL</label>
       <input type="text" id="companySlug" placeholder="Ex: body-face">
       <div class="hint">URL gerada: <span id="slugPreview" style="color:var(--accent)">app.staffconsult.com.br/painel/body-face</span></div>
+    </div>
+    <div class="form-group" style="margin-top:20px">
+      <label>Módulos contratados</label>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        <label class="module-option">
+          <input type="checkbox" id="modUpload" checked>
+          <div>
+            <div class="mod-title">Input de Vendas</div>
+            <div class="mod-desc">Upload de planilhas → lançamentos no Conta Azul</div>
+          </div>
+        </label>
+        <label class="module-option">
+          <input type="checkbox" id="modAsaas">
+          <div>
+            <div class="mod-title">Integração Asaas</div>
+            <div class="mod-desc">Pagamentos recebidos no Asaas → Conta Azul automaticamente</div>
+          </div>
+        </label>
+      </div>
     </div>
     <div class="btn-group">
       <a href="/painel" class="btn btn-secondary">← Voltar ao Painel</a>
@@ -169,8 +202,34 @@
     </div>
   </div>
 
-  <!-- STEP 4: CONCLUÍDO -->
+  <!-- STEP 4: CONFIGURAR ASAAS (condicional) -->
   <div class="card" id="step4" style="display:none">
+    <h2>4. Configurar Asaas</h2>
+    <p class="desc">Informe a API Key do Asaas desta empresa. Você encontra em <strong>Minha Conta → Configurações → Integrações</strong> no painel do Asaas.</p>
+    <div class="form-group">
+      <label>API Key</label>
+      <input type="password" id="asaasApiKey" placeholder="$aas_..." style="font-family:'DM Mono',monospace;font-size:13px">
+    </div>
+    <div class="form-group">
+      <label>Ambiente</label>
+      <select id="asaasEnv">
+        <option value="production">Produção</option>
+        <option value="sandbox">Sandbox (testes)</option>
+      </select>
+    </div>
+    <div id="asaasPingStatus" style="font-size:12px;color:var(--muted);min-height:18px;margin-bottom:8px"></div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="goStep(3)">← Voltar</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="goStep(5)">Pular por agora</button>
+        <button class="btn btn-secondary" onclick="pingAsaasOnboarding()">🔌 Testar</button>
+        <button class="btn btn-primary" onclick="step4Next()">Salvar →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 5: CONCLUÍDO -->
+  <div class="card" id="step5" style="display:none">
     <div class="success-box">
       <div class="success-icon">🎉</div>
       <h2>Cliente configurado!</h2>
@@ -190,6 +249,7 @@
 const API = '';
 let companyId = null;
 let caAccounts = [];
+let asaasSelected = false;
 
 const PAYMENT_LABELS = {
   PIX: 'PIX',
@@ -214,17 +274,19 @@ document.getElementById('companySlug').addEventListener('input', function() {
 });
 
 function goStep(n) {
-  [1,2,3,4].forEach(i => {
+  [1,2,3,4,5].forEach(i => {
     document.getElementById('step' + i).style.display = i === n ? 'block' : 'none';
     const sc = document.getElementById('sc' + i);
     const sl = document.getElementById('sl' + i);
     if (i < n) { sc.className = 'step-circle done'; sc.textContent = '✓'; }
     else if (i === n) { sc.className = 'step-circle active'; sc.textContent = i; sl.className = 'step-label active'; }
     else { sc.className = 'step-circle'; sc.textContent = i; sl.className = 'step-label'; }
-    if (i < 4) {
-      document.getElementById('line' + i).className = i < n ? 'step-line done' : 'step-line';
-    }
+    if (i < 5) document.getElementById('line' + i).className = i < n ? 'step-line done' : 'step-line';
   });
+  // Dim step 4 (Asaas) when not selected
+  if (!asaasSelected && n !== 4) {
+    document.getElementById('sc4').className = 'step-circle skipped';
+  }
 }
 
 async function step1Next() {
@@ -232,6 +294,10 @@ async function step1Next() {
   const slug = document.getElementById('companySlug').value.trim();
   if (!name) return toast('Informe o nome da empresa', 'error');
   if (!slug) return toast('Informe o slug', 'error');
+
+  const uploadEnabled = document.getElementById('modUpload').checked;
+  asaasSelected = document.getElementById('modAsaas').checked;
+  if (!uploadEnabled && !asaasSelected) return toast('Selecione ao menos um módulo', 'error');
 
   try {
     const res = await fetch(`${API}/v1/companies`, {
@@ -242,6 +308,12 @@ async function step1Next() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Erro ao criar empresa');
     companyId = data.id;
+    // Aplica seleção de módulos
+    await fetch(`${API}/v1/companies/${companyId}`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({upload_enabled: uploadEnabled, asaas_enabled: asaasSelected})
+    });
     document.getElementById('step2-company-name').textContent = data.name;
     goStep(2);
   } catch(e) {
@@ -334,12 +406,55 @@ async function step3Next() {
     const url = `https://app.staffconsult.com.br/painel/${slug}`;
     document.getElementById('finalUrl').textContent = url;
     document.getElementById('btnGoPanel').href = `/painel/${slug}`;
-    goStep(4);
+    goStep(asaasSelected ? 4 : 5);
   } catch(e) {
     toast('Erro ao salvar mapeamentos: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Salvar e Concluir →';
+  }
+}
+
+async function step4Next() {
+  const apiKey = document.getElementById('asaasApiKey').value.trim();
+  const env = document.getElementById('asaasEnv').value;
+  if (!apiKey) return toast('Informe a API Key do Asaas', 'error');
+  try {
+    const res = await fetch(`${API}/v1/companies/${companyId}/asaas/credentials`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({api_key: apiKey, environment: env})
+    });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Erro ao salvar'); }
+    toast('Credenciais salvas!', 'success');
+    goStep(5);
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function pingAsaasOnboarding() {
+  const statusEl = document.getElementById('asaasPingStatus');
+  statusEl.textContent = 'Testando...';
+  statusEl.style.color = 'var(--muted)';
+  // Salva temporariamente antes de testar
+  const apiKey = document.getElementById('asaasApiKey').value.trim();
+  const env = document.getElementById('asaasEnv').value;
+  if (!apiKey) { statusEl.textContent = 'Informe a API Key primeiro.'; statusEl.style.color = 'var(--warn)'; return; }
+  try {
+    await fetch(`${API}/v1/companies/${companyId}/asaas/credentials`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({api_key: apiKey, environment: env})
+    });
+    const res = await fetch(`${API}/v1/companies/${companyId}/asaas/ping`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Falha');
+    statusEl.textContent = `✅ Conectado: ${data.name || data.commercialName || 'conta verificada'}`;
+    statusEl.style.color = 'var(--accent)';
+  } catch(e) {
+    statusEl.textContent = `❌ Erro: ${e.message}`;
+    statusEl.style.color = 'var(--danger)';
   }
 }
 
@@ -351,9 +466,14 @@ function copyUrl() {
 function resetForm() {
   companyId = null;
   caAccounts = [];
+  asaasSelected = false;
   document.getElementById('companyName').value = '';
   document.getElementById('companySlug').value = '';
   document.getElementById('slugPreview').textContent = 'app.staffconsult.com.br/painel/...';
+  document.getElementById('modUpload').checked = true;
+  document.getElementById('modAsaas').checked = false;
+  document.getElementById('asaasApiKey').value = '';
+  document.getElementById('asaasPingStatus').textContent = '';
   goStep(1);
 }
 
