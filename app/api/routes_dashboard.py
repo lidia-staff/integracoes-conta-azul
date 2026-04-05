@@ -4,6 +4,7 @@ Dashboard API — todos os endpoints /dashboard/*
 
 from __future__ import annotations
 import json
+import os
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -24,6 +25,65 @@ from app.services.dashboard_snapshot_job import run_snapshot, run_snapshot_last_
 from app.services.dashboard_service import build_category_map
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+# ── Bootstrap — primeiro usuário Master ──────────────────────────────
+# Protegido por BOOTSTRAP_SECRET (variável de ambiente).
+# Bloqueado automaticamente após o primeiro Master ser criado.
+
+class BootstrapRequest(BaseModel):
+    secret: str
+    email: str
+    password: str
+
+
+@router.post("/bootstrap", summary="Cria o primeiro usuário Master (uso único)")
+def bootstrap(req: BootstrapRequest):
+    """
+    Cria o primeiro usuário Master do sistema.
+    - Só funciona se a variável BOOTSTRAP_SECRET estiver definida no Railway.
+    - Bloqueado automaticamente após o primeiro Master existir.
+    - Remova BOOTSTRAP_SECRET do Railway após usar para desativar.
+    """
+    expected = os.getenv("BOOTSTRAP_SECRET", "")
+    if not expected:
+        raise HTTPException(status_code=403, detail="Bootstrap desativado (BOOTSTRAP_SECRET não configurado)")
+
+    if req.secret != expected:
+        raise HTTPException(status_code=403, detail="Secret inválido")
+
+    db = SessionLocal()
+    try:
+        # Bloqueia se já existe algum Master
+        existing_master = db.query(DashUser).filter(DashUser.role == "master").first()
+        if existing_master:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Já existe um usuário Master ({existing_master.email}). Bootstrap bloqueado."
+            )
+
+        # Verifica se email já está em uso
+        if db.query(DashUser).filter(DashUser.email == req.email.strip().lower()).first():
+            raise HTTPException(status_code=409, detail="Email já cadastrado")
+
+        user = DashUser(
+            email=req.email.strip().lower(),
+            password_hash=hash_password(req.password),
+            role="master",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        token = create_token(user.id, "master", None, None)
+        return {
+            "ok": True,
+            "message": "Usuário Master criado com sucesso. Remova BOOTSTRAP_SECRET do Railway agora.",
+            "email": user.email,
+            "token": token,
+        }
+    finally:
+        db.close()
 
 
 # ── Schemas ─────────────────────────────────────────────────────────
