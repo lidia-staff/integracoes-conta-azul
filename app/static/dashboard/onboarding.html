@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StaffConnect — Novo Cliente</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --orange: #F26522;
+  --orange-dark: #C94E0F;
+  --cream: #F5EDD6;
+  --cream-dark: #EDE0C0;
+  --dark: #1E1E1E;
+  --dark2: #2D2D2D;
+  --gray: #6B6B6B;
+  --white: #FFFFFF;
+  --green: #2ECC71;
+  --red: #E74C3C;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'DM Sans',sans-serif; background:var(--cream); color:var(--dark); min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:32px 16px; }
+
+.header { width:100%; max-width:700px; margin-bottom:32px; display:flex; align-items:center; justify-content:space-between; }
+.header-logo { font-family:'Syne',sans-serif; font-size:20px; font-weight:800; color:var(--orange); }
+.header-back { font-size:13px; color:var(--gray); cursor:pointer; font-weight:600; text-decoration:none; }
+.header-back:hover { color:var(--orange); }
+
+/* STEPPER */
+.stepper { display:flex; align-items:center; gap:0; margin-bottom:32px; width:100%; max-width:700px; }
+.step { display:flex; flex-direction:column; align-items:center; flex:1; position:relative; }
+.step:not(:last-child)::after { content:''; position:absolute; top:16px; left:50%; width:100%; height:2px; background:var(--cream-dark); z-index:0; }
+.step.done::after { background:var(--orange); }
+.step-circle { width:32px; height:32px; border-radius:50%; border:2px solid var(--cream-dark); background:var(--white); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--gray); z-index:1; transition:.3s; }
+.step.active .step-circle { border-color:var(--orange); background:var(--orange); color:var(--white); }
+.step.done .step-circle { border-color:var(--orange); background:var(--orange); color:var(--white); }
+.step-label { font-size:10px; color:var(--gray); margin-top:6px; text-align:center; font-weight:600; text-transform:uppercase; letter-spacing:.5px; white-space:nowrap; }
+.step.active .step-label { color:var(--orange); }
+
+/* CARD */
+.card { background:var(--white); border-radius:20px; padding:36px 40px; width:100%; max-width:700px; box-shadow:0 4px 24px rgba(0,0,0,.06); }
+.card-title { font-family:'Syne',sans-serif; font-size:20px; font-weight:800; margin-bottom:4px; }
+.card-sub { font-size:13px; color:var(--gray); margin-bottom:28px; }
+
+/* FORM */
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+.form-row.single { grid-template-columns:1fr; }
+.form-group { display:flex; flex-direction:column; gap:6px; }
+.form-label { font-size:11px; font-weight:700; color:var(--gray); text-transform:uppercase; letter-spacing:.8px; }
+.form-input { padding:12px 16px; border:1.5px solid var(--cream-dark); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:14px; background:var(--cream); color:var(--dark); outline:none; transition:.2s; }
+.form-input:focus { border-color:var(--orange); background:var(--white); }
+.form-select { padding:12px 16px; border:1.5px solid var(--cream-dark); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:14px; background:var(--cream); color:var(--dark); outline:none; cursor:pointer; transition:.2s; }
+.form-select:focus { border-color:var(--orange); background:var(--white); }
+.color-row { display:flex; align-items:center; gap:12px; }
+.color-preview { width:36px; height:36px; border-radius:8px; border:2px solid var(--cream-dark); }
+
+/* OAUTH BOX */
+.oauth-box { border:1.5px dashed var(--cream-dark); border-radius:14px; padding:28px; text-align:center; margin-bottom:16px; transition:.2s; }
+.oauth-box.connected { border-color:var(--green); border-style:solid; background:rgba(46,204,113,.05); }
+.oauth-icon { font-size:32px; margin-bottom:12px; }
+.oauth-title { font-family:'Syne',sans-serif; font-size:15px; font-weight:700; margin-bottom:6px; }
+.oauth-sub { font-size:13px; color:var(--gray); margin-bottom:16px; }
+.oauth-btn { background:var(--dark); color:white; border:none; border-radius:10px; padding:12px 24px; font-family:'Syne',sans-serif; font-size:14px; font-weight:700; cursor:pointer; transition:.2s; }
+.oauth-btn:hover { background:var(--dark2); }
+.oauth-connected-label { font-size:14px; font-weight:600; color:var(--green); }
+
+/* FILTROS */
+.filter-section { margin-bottom:20px; }
+.filter-title { font-family:'Syne',sans-serif; font-size:14px; font-weight:700; margin-bottom:12px; }
+.filter-list { display:flex; flex-direction:column; gap:8px; max-height:200px; overflow-y:auto; padding:4px 0; }
+.filter-item { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--cream); border-radius:8px; cursor:pointer; transition:.2s; user-select:none; }
+.filter-item:hover { background:var(--cream-dark); }
+.filter-item.ignored { opacity:.5; text-decoration:line-through; }
+.filter-checkbox { width:16px; height:16px; accent-color:var(--orange); cursor:pointer; }
+.filter-item-name { font-size:13px; }
+.filter-item-code { font-size:11px; color:var(--gray); margin-left:auto; }
+.filter-loading { font-size:13px; color:var(--gray); padding:16px; text-align:center; }
+
+/* BENCHMARKS */
+.bench-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.bench-item { background:var(--cream); border-radius:10px; padding:14px; display:flex; flex-direction:column; gap:4px; }
+.bench-label { font-size:11px; font-weight:700; color:var(--gray); text-transform:uppercase; letter-spacing:.5px; }
+.bench-input { border:none; background:transparent; font-family:'Syne',sans-serif; font-size:20px; font-weight:800; color:var(--dark); width:100%; outline:none; }
+.bench-unit { font-size:11px; color:var(--gray); }
+
+/* FOOTER */
+.footer-nav { display:flex; justify-content:space-between; align-items:center; margin-top:28px; }
+.btn-back { background:transparent; color:var(--gray); border:1.5px solid var(--cream-dark); border-radius:10px; padding:12px 24px; font-family:'DM Sans',sans-serif; font-size:14px; font-weight:600; cursor:pointer; transition:.2s; }
+.btn-back:hover { border-color:var(--dark); color:var(--dark); }
+.btn-next { background:var(--orange); color:white; border:none; border-radius:10px; padding:12px 28px; font-family:'Syne',sans-serif; font-size:14px; font-weight:700; cursor:pointer; transition:.2s; }
+.btn-next:hover { background:var(--orange-dark); }
+.btn-next:disabled { opacity:.5; cursor:not-allowed; }
+
+/* STEP 4 PREVIEW */
+.preview-card { border:1.5px solid var(--cream-dark); border-radius:14px; overflow:hidden; margin-bottom:20px; }
+.preview-header { padding:16px 20px; display:flex; align-items:center; gap:12px; }
+.preview-avatar { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-family:'Syne',sans-serif; font-size:16px; font-weight:800; color:white; }
+.preview-name { font-family:'Syne',sans-serif; font-size:16px; font-weight:700; }
+.preview-seg { font-size:12px; color:var(--gray); }
+
+/* SUCESSO */
+.success-box { text-align:center; padding:20px 0; }
+.success-icon { font-size:56px; margin-bottom:16px; }
+.success-title { font-family:'Syne',sans-serif; font-size:24px; font-weight:800; margin-bottom:8px; }
+.success-sub { font-size:14px; color:var(--gray); margin-bottom:28px; line-height:1.5; }
+.success-actions { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+
+.error-msg { background:#FEE; border:1px solid #FCC; color:#C00; font-size:13px; padding:10px 14px; border-radius:8px; margin-top:8px; display:none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">StaffConnect</div>
+  <a class="header-back" href="/dashboard">← Voltar ao painel</a>
+</div>
+
+<!-- STEPPER -->
+<div class="stepper" id="stepper">
+  <div class="step active" id="step-1">
+    <div class="step-circle">1</div>
+    <div class="step-label">Dados Básicos</div>
+  </div>
+  <div class="step" id="step-2">
+    <div class="step-circle">2</div>
+    <div class="step-label">Conta Azul</div>
+  </div>
+  <div class="step" id="step-3">
+    <div class="step-circle">3</div>
+    <div class="step-label">Filtros</div>
+  </div>
+  <div class="step" id="step-4">
+    <div class="step-circle">4</div>
+    <div class="step-label">Benchmarks</div>
+  </div>
+</div>
+
+<!-- CARDS -->
+<div class="card" id="card-1">
+  <div class="card-title">Dados Básicos</div>
+  <div class="card-sub">Informações gerais do novo cliente</div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label class="form-label">Nome do cliente *</label>
+      <input class="form-input" id="f-name" placeholder="Body & Face Estética" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Segmento *</label>
+      <select class="form-select" id="f-segment">
+        <option value="servico">Serviço</option>
+        <option value="estetica">Estética / Beleza</option>
+        <option value="construcao">Construção Civil</option>
+        <option value="comercio">Comércio</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label class="form-label">Cor principal</label>
+      <div class="color-row">
+        <input type="color" class="form-input" id="f-color" value="#F26522" style="padding:4px;width:56px;cursor:pointer" />
+        <input class="form-input" id="f-color-hex" value="#F26522" style="flex:1" placeholder="#F26522" />
+        <div class="color-preview" id="color-preview" style="background:#F26522"></div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">URL do Logo (opcional)</label>
+      <input class="form-input" id="f-logo" placeholder="https://..." />
+    </div>
+  </div>
+
+  <div class="error-msg" id="err-1"></div>
+  <div class="footer-nav">
+    <div></div>
+    <button class="btn-next" onclick="step1Next()">Próximo →</button>
+  </div>
+</div>
+
+<div class="card" id="card-2" style="display:none">
+  <div class="card-title">Vinculação Conta Azul</div>
+  <div class="card-sub">Conecte a conta do cliente no Conta Azul via OAuth</div>
+
+  <div class="oauth-box" id="oauth-box">
+    <div class="oauth-icon">🔗</div>
+    <div class="oauth-title">Conectar Conta Azul</div>
+    <div class="oauth-sub">Clique no botão abaixo para autorizar o acesso à conta do cliente no Conta Azul. Você será redirecionado para a página de autorização.</div>
+    <button class="oauth-btn" onclick="startOAuth()">Autorizar no Conta Azul</button>
+  </div>
+
+  <div class="oauth-box connected" id="oauth-box-ok" style="display:none">
+    <div class="oauth-icon">✅</div>
+    <div class="oauth-title">Conta Azul conectada</div>
+    <div class="oauth-connected-label">Autorização concluída com sucesso</div>
+  </div>
+
+  <div class="error-msg" id="err-2"></div>
+  <div class="footer-nav">
+    <button class="btn-back" onclick="goStep(1)">← Voltar</button>
+    <button class="btn-next" id="btn-step2-next" onclick="step2Next()" disabled>Próximo →</button>
+  </div>
+</div>
+
+<div class="card" id="card-3" style="display:none">
+  <div class="card-title">Filtros</div>
+  <div class="card-sub">Marque contas e categorias que devem ser IGNORADAS no cálculo do DRE (ex: contas transitórias, transferências internas)</div>
+
+  <div class="filter-section">
+    <div class="filter-title">Contas Financeiras</div>
+    <div class="filter-list" id="filter-contas">
+      <div class="filter-loading">Carregando contas...</div>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-title">Categorias DRE</div>
+    <div class="filter-list" id="filter-cats">
+      <div class="filter-loading">Carregando categorias...</div>
+    </div>
+  </div>
+
+  <div class="error-msg" id="err-3"></div>
+  <div class="footer-nav">
+    <button class="btn-back" onclick="goStep(2)">← Voltar</button>
+    <button class="btn-next" onclick="step3Next()">Próximo →</button>
+  </div>
+</div>
+
+<div class="card" id="card-4" style="display:none">
+  <div class="card-title">Benchmarks</div>
+  <div class="card-sub">Metas de desempenho do cliente. Pré-preenchidas por segmento — edite conforme o combinado.</div>
+
+  <div class="preview-card">
+    <div class="preview-header" id="bench-preview-header">
+      <div class="preview-avatar" id="bench-avatar" style="background:#F26522">—</div>
+      <div>
+        <div class="preview-name" id="bench-preview-name">—</div>
+        <div class="preview-seg" id="bench-preview-seg">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bench-grid" id="bench-grid">
+    <!-- preenchido por JS -->
+  </div>
+
+  <div class="error-msg" id="err-4"></div>
+  <div class="footer-nav">
+    <button class="btn-back" onclick="goStep(3)">← Voltar</button>
+    <button class="btn-next" onclick="step4Next()">Finalizar ✓</button>
+  </div>
+</div>
+
+<!-- SUCESSO -->
+<div class="card" id="card-success" style="display:none">
+  <div class="success-box">
+    <div class="success-icon">🎉</div>
+    <div class="success-title">Cliente cadastrado!</div>
+    <div class="success-sub" id="success-msg">
+      O cliente foi cadastrado com sucesso.<br>
+      O primeiro snapshot será gerado agora para popular o histórico.
+    </div>
+    <div class="success-actions">
+      <button class="btn-next" onclick="window.location.href='/dashboard'">← Voltar ao Painel</button>
+      <button class="btn-back" onclick="novoCliente()">+ Novo Cliente</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// ESTADO
+// ═══════════════════════════════════════════════════════════════════
+const S = {
+  step: 1,
+  clientId: null,      // criado na etapa 1
+  oauthDone: false,
+  ignoredAccounts: [],
+  ignoredCategories: [],
+  benchmarks: {},
+};
+
+const TOKEN = localStorage.getItem('dash_token');
+
+// ── Segmento → benchmarks padrão ─────────────────────────────────
+const BENCH_DEFAULTS = {
+  servico:    { EBITDA:15, MARGEM_CONTRIBUICAO:40, MARKUP:50, PCT_PESSOAL:35, PCT_MARKETING:5, LUCRO_LIQUIDO:10 },
+  estetica:   { EBITDA:18, MARGEM_CONTRIBUICAO:45, MARKUP:60, PCT_PESSOAL:38, PCT_MARKETING:6, LUCRO_LIQUIDO:12 },
+  construcao: { EBITDA:10, MARGEM_CONTRIBUICAO:35, MARKUP:40, PCT_PESSOAL:30, PCT_MARKETING:3, LUCRO_LIQUIDO:7  },
+  comercio:   { EBITDA:8,  MARGEM_CONTRIBUICAO:30, MARKUP:35, PCT_PESSOAL:20, PCT_MARKETING:4, LUCRO_LIQUIDO:5  },
+};
+const BENCH_LABELS = {
+  EBITDA: 'EBITDA ideal',
+  MARGEM_CONTRIBUICAO: 'Margem de Contribuição',
+  MARKUP: 'Markup',
+  PCT_PESSOAL: '% Pessoal / Faturamento',
+  PCT_MARKETING: '% Marketing / Faturamento',
+  LUCRO_LIQUIDO: 'Lucro Líquido mín.',
+};
+
+// Sync color picker ↔ text input ↔ preview
+document.getElementById('f-color').addEventListener('input', e => {
+  document.getElementById('f-color-hex').value = e.target.value;
+  document.getElementById('color-preview').style.background = e.target.value;
+});
+document.getElementById('f-color-hex').addEventListener('input', e => {
+  const v = e.target.value;
+  if (/^#[0-9A-Fa-f]{6}$/.test(v)) {
+    document.getElementById('f-color').value = v;
+    document.getElementById('color-preview').style.background = v;
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// ETAPA 1 — Dados básicos
+// ═══════════════════════════════════════════════════════════════════
+async function step1Next() {
+  const name = document.getElementById('f-name').value.trim();
+  const segment = document.getElementById('f-segment').value;
+  const color = document.getElementById('f-color-hex').value.trim() || '#F26522';
+  const logo = document.getElementById('f-logo').value.trim() || null;
+
+  if (!name) { showErr('err-1','Nome do cliente é obrigatório'); return; }
+  hideErr('err-1');
+
+  try {
+    const resp = await api('/dashboard/clients', 'POST', {
+      name, segment, primary_color: color, logo_url: logo
+    });
+    S.clientId = resp.id;
+    goStep(2);
+  } catch(e) {
+    showErr('err-1', e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ETAPA 2 — OAuth Conta Azul
+// ═══════════════════════════════════════════════════════════════════
+function startOAuth() {
+  if (!S.clientId) { showErr('err-2','Erro: cliente não criado'); return; }
+  // Abre OAuth em popup
+  const w = 600, h = 700;
+  const left = (screen.width-w)/2, top = (screen.height-h)/2;
+  const popup = window.open(
+    `/api/contaazul/start?context=dashboard&dash_client_id=${S.clientId}`,
+    'oauth',
+    `width=${w},height=${h},left=${left},top=${top}`
+  );
+
+  // Escuta mensagem de retorno do popup
+  window.addEventListener('message', function handler(e) {
+    if (e.data && e.data.type === 'oauth_success') {
+      window.removeEventListener('message', handler);
+      oauthSuccess();
+    }
+    if (e.data && e.data.type === 'oauth_error') {
+      window.removeEventListener('message', handler);
+      showErr('err-2', 'Erro na autorização: ' + e.data.message);
+    }
+  });
+}
+
+function oauthSuccess() {
+  S.oauthDone = true;
+  document.getElementById('oauth-box').style.display = 'none';
+  document.getElementById('oauth-box-ok').style.display = '';
+  document.getElementById('btn-step2-next').disabled = false;
+  hideErr('err-2');
+}
+
+async function step2Next() {
+  if (!S.oauthDone) { showErr('err-2','Complete a autorização do Conta Azul primeiro'); return; }
+  goStep(3);
+  await loadFiltros();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ETAPA 3 — Filtros
+// ═══════════════════════════════════════════════════════════════════
+async function loadFiltros() {
+  try {
+    const [contasResp, catsResp] = await Promise.all([
+      api(`/dashboard/ca/contas/${S.clientId}`),
+      api(`/dashboard/ca/categorias/${S.clientId}`),
+    ]);
+
+    const contasList = document.getElementById('filter-contas');
+    const contas = contasResp.contas || [];
+    if (!contas.length) {
+      contasList.innerHTML = '<div class="filter-loading">Nenhuma conta encontrada</div>';
+    } else {
+      contasList.innerHTML = contas.map(c => `
+        <label class="filter-item" id="conta_${c.id}">
+          <input type="checkbox" class="filter-checkbox" onchange="toggleIgnore('conta','${c.id}',this.checked)"
+                 ${S.ignoredAccounts.includes(String(c.id)) ? 'checked' : ''} />
+          <span class="filter-item-name">${c.nome || c.name || c.descricao || c.id}</span>
+          <span class="filter-item-code">${c.tipo || ''}</span>
+        </label>`).join('');
+    }
+
+    const catsList = document.getElementById('filter-cats');
+    const cats = catsResp.categorias || [];
+    if (!cats.length) {
+      catsList.innerHTML = '<div class="filter-loading">Nenhuma categoria encontrada</div>';
+    } else {
+      catsList.innerHTML = cats.map(c => `
+        <label class="filter-item" id="cat_${c.id}">
+          <input type="checkbox" class="filter-checkbox" onchange="toggleIgnore('cat','${c.id}',this.checked)"
+                 ${S.ignoredCategories.includes(String(c.id)) ? 'checked' : ''} />
+          <span class="filter-item-name">${c.nome || c.name || c.descricao || c.id}</span>
+          <span class="filter-item-code">${c.entrada_dre || c.entradaDre || ''}</span>
+        </label>`).join('');
+    }
+  } catch(e) {
+    showErr('err-3', 'Erro ao carregar filtros: ' + e.message);
+  }
+}
+
+function toggleIgnore(tipo, id, checked) {
+  if (tipo === 'conta') {
+    if (checked) { if (!S.ignoredAccounts.includes(id)) S.ignoredAccounts.push(id); }
+    else { S.ignoredAccounts = S.ignoredAccounts.filter(x=>x!==id); }
+  } else {
+    if (checked) { if (!S.ignoredCategories.includes(id)) S.ignoredCategories.push(id); }
+    else { S.ignoredCategories = S.ignoredCategories.filter(x=>x!==id); }
+  }
+}
+
+async function step3Next() {
+  // Salva filtros no cliente
+  try {
+    await api(`/dashboard/clients/${S.clientId}`, 'PUT', {
+      ignored_accounts: S.ignoredAccounts,
+      ignored_categories: S.ignoredCategories,
+    });
+    goStep(4);
+    buildBenchmarks();
+  } catch(e) {
+    showErr('err-3', e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ETAPA 4 — Benchmarks
+// ═══════════════════════════════════════════════════════════════════
+function buildBenchmarks() {
+  const name = document.getElementById('f-name').value.trim();
+  const seg = document.getElementById('f-segment').value;
+  const color = document.getElementById('f-color-hex').value || '#F26522';
+  const initials = name.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '?';
+
+  document.getElementById('bench-avatar').textContent = initials;
+  document.getElementById('bench-avatar').style.background = color;
+  document.getElementById('bench-preview-name').textContent = name;
+  document.getElementById('bench-preview-seg').textContent = SEG_LABELS[seg] || seg;
+
+  const defaults = BENCH_DEFAULTS[seg] || BENCH_DEFAULTS.servico;
+  S.benchmarks = { ...defaults };
+
+  document.getElementById('bench-grid').innerHTML = Object.entries(BENCH_LABELS).map(([k,lbl]) => `
+    <div class="bench-item">
+      <div class="bench-label">${lbl}</div>
+      <input class="bench-input" id="bench_${k}" type="number" step="0.1"
+             value="${defaults[k] || 0}" onchange="S.benchmarks['${k}']=parseFloat(this.value)||0" />
+      <div class="bench-unit">% do faturamento</div>
+    </div>`).join('');
+}
+
+async function step4Next() {
+  // Lê valores atuais dos inputs
+  Object.keys(BENCH_LABELS).forEach(k => {
+    const el = document.getElementById('bench_' + k);
+    if (el) S.benchmarks[k] = parseFloat(el.value) || 0;
+  });
+
+  try {
+    await api(`/dashboard/clients/${S.clientId}`, 'PUT', { benchmarks: S.benchmarks });
+
+    // Inicia snapshot dos últimos 12 meses
+    api(`/dashboard/snapshot/run/${S.clientId}`, 'POST', { n_months: 12 })
+      .then(() => {})
+      .catch(() => {}); // em background
+
+    document.getElementById('card-4').style.display = 'none';
+    document.getElementById('card-success').style.display = '';
+    document.getElementById('success-msg').textContent =
+      `${document.getElementById('f-name').value} foi cadastrado com sucesso.\n` +
+      'O histórico dos últimos 12 meses está sendo gerado em segundo plano.';
+
+    // Atualiza stepper
+    updateStepper(5);
+  } catch(e) {
+    showErr('err-4', e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NAVEGAÇÃO E UTILITÁRIOS
+// ═══════════════════════════════════════════════════════════════════
+const SEG_LABELS = { servico:'Serviço', estetica:'Estética / Beleza', construcao:'Construção Civil', comercio:'Comércio' };
+
+function goStep(n) {
+  for (let i=1; i<=4; i++) {
+    document.getElementById('card-'+i).style.display = i===n ? '' : 'none';
+  }
+  S.step = n;
+  updateStepper(n);
+}
+
+function updateStepper(current) {
+  for (let i=1; i<=4; i++) {
+    const el = document.getElementById('step-'+i);
+    if (!el) continue;
+    el.classList.remove('active','done');
+    if (i < current) el.classList.add('done');
+    else if (i === current) el.classList.add('active');
+  }
+}
+
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = msg; el.style.display = ''; }
+}
+function hideErr(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'none';
+}
+
+async function api(path, method='GET', body=null) {
+  const opts = {
+    method,
+    headers: { 'Content-Type':'application/json' },
+  };
+  if (TOKEN) opts.headers['Authorization'] = 'Bearer ' + TOKEN;
+  if (body) opts.body = JSON.stringify(body);
+  const resp = await fetch(path, opts);
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+    throw new Error(err.detail || resp.statusText);
+  }
+  return resp.json();
+}
+
+function novoCliente() {
+  S.step = 1; S.clientId = null; S.oauthDone = false;
+  S.ignoredAccounts = []; S.ignoredCategories = []; S.benchmarks = {};
+  document.getElementById('card-success').style.display = 'none';
+  document.getElementById('f-name').value = '';
+  document.getElementById('oauth-box').style.display = '';
+  document.getElementById('oauth-box-ok').style.display = 'none';
+  document.getElementById('btn-step2-next').disabled = true;
+  goStep(1);
+}
+
+// Verifica login ao carregar
+window.addEventListener('DOMContentLoaded', () => {
+  if (!TOKEN) {
+    window.location.href = '/dashboard';
+  }
+});
+</script>
+</body>
+</html>
