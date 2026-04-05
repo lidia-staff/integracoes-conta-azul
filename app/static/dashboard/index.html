@@ -3,10 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StaffConnect Dashboard</title>
+<title>Staff Conect — Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <style>
 :root {
+  /* Staff Conect brand colors */
+  --brand: #00e5a0;
+  --brand-dark: #00B87A;
+  --brand-dim: rgba(0,229,160,0.12);
+  /* Santos / client-specific (overridden dynamically per client) */
   --orange: #F26522;
   --orange-light: #FF8C47;
   --orange-dark: #C94E0F;
@@ -20,7 +25,8 @@
   --green: #2ECC71;
   --red: #E74C3C;
   --sidebar-w: 220px;
-  --client-color: #F26522;
+  /* Defaults to Staff Conect brand; overridden to client color when dashboard loads */
+  --client-color: #00e5a0;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:'DM Sans',sans-serif; background:var(--cream); color:var(--dark); min-height:100vh; display:flex; }
@@ -28,7 +34,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--cream); color:var(--da
 /* ── SIDEBAR ── */
 .sidebar { width:var(--sidebar-w); background:var(--dark); min-height:100vh; display:flex; flex-direction:column; position:fixed; left:0; top:0; bottom:0; z-index:100; }
 .sidebar-logo { padding:28px 24px 24px; border-bottom:1px solid rgba(255,255,255,.08); }
-.logo-main { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; color:var(--client-color); letter-spacing:-.5px; }
+.logo-main { font-family:'Syne',sans-serif; font-size:18px; font-weight:800; color:var(--brand); letter-spacing:-.3px; }
 .logo-sub { font-size:10px; color:rgba(255,255,255,.4); letter-spacing:1.5px; text-transform:uppercase; margin-top:2px; }
 .sidebar-client { padding:16px 24px; background:rgba(242,101,34,.12); margin:16px 12px; border-radius:10px; border-left:3px solid var(--client-color); }
 .sidebar-client-label { font-size:9px; text-transform:uppercase; letter-spacing:1.5px; color:rgba(255,255,255,.35); margin-bottom:4px; }
@@ -128,16 +134,16 @@ td.pct { color:var(--gray); font-size:11px; }
 .chart-bar-value { font-size:10px; font-weight:700; color:var(--dark); text-align:center; }
 
 /* ── LOGIN ── */
-#login-screen { display:flex; align-items:center; justify-content:center; min-height:100vh; width:100%; background:var(--cream); }
-.login-box { background:var(--white); border-radius:20px; padding:48px 40px; width:100%; max-width:400px; box-shadow:0 8px 40px rgba(0,0,0,.08); }
-.login-logo { font-family:'Syne',sans-serif; font-size:28px; font-weight:800; color:var(--client-color); margin-bottom:4px; }
-.login-sub { font-size:12px; color:var(--gray); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:32px; }
-.login-label { font-size:12px; font-weight:600; color:var(--gray); text-transform:uppercase; letter-spacing:.8px; margin-bottom:6px; display:block; }
-.login-input { width:100%; padding:12px 16px; border:1.5px solid var(--cream-dark); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:14px; background:var(--cream); color:var(--dark); outline:none; transition:.2s; margin-bottom:16px; }
-.login-input:focus { border-color:var(--client-color); background:var(--white); }
-.login-btn { width:100%; padding:14px; background:var(--client-color); color:white; border:none; border-radius:10px; font-family:'Syne',sans-serif; font-size:15px; font-weight:700; cursor:pointer; transition:.2s; margin-top:8px; }
-.login-btn:hover { background:var(--orange-dark); }
-.login-error { background:#FEE; border:1px solid #FCC; color:#C00; font-size:13px; padding:10px 14px; border-radius:8px; margin-top:12px; display:none; }
+#login-screen { display:flex; align-items:center; justify-content:center; min-height:100vh; width:100%; background:#0f0f0f; }
+.login-box { background:#1a1a1a; border-radius:20px; padding:48px 40px; width:100%; max-width:400px; box-shadow:0 8px 40px rgba(0,0,0,.4); border:1px solid #2e2e2e; }
+.login-logo { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; color:var(--brand); margin-bottom:4px; letter-spacing:-.3px; }
+.login-sub { font-size:11px; color:#666; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:32px; }
+.login-label { font-size:11px; font-weight:600; color:#888; text-transform:uppercase; letter-spacing:.8px; margin-bottom:6px; display:block; }
+.login-input { width:100%; padding:12px 16px; border:1.5px solid #2e2e2e; border-radius:10px; font-family:'DM Sans',sans-serif; font-size:14px; background:#232323; color:#e8e8e8; outline:none; transition:.2s; margin-bottom:16px; }
+.login-input:focus { border-color:var(--brand); background:#2a2a2a; }
+.login-btn { width:100%; padding:14px; background:var(--brand); color:#0f0f0f; border:none; border-radius:10px; font-family:'Syne',sans-serif; font-size:15px; font-weight:700; cursor:pointer; transition:.2s; margin-top:8px; }
+.login-btn:hover { background:var(--brand-dark); }
+.login-error { background:rgba(231,76,60,.15); border:1px solid rgba(231,76,60,.3); color:#ff6b6b; font-size:13px; padding:10px 14px; border-radius:8px; margin-top:12px; display:none; }
 
 /* ── PAINEL PARCEIRO ── */
 .painel-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; margin-top:16px; }
@@ -151,10 +157,10 @@ td.pct { color:var(--gray); font-size:11px; }
 .client-status-ok { font-size:11px; color:var(--green); font-weight:600; }
 .client-status-pend { font-size:11px; color:var(--orange); font-weight:600; }
 .client-last-update { font-size:10px; color:var(--gray); }
-.btn-primary { background:var(--client-color); color:white; border:none; border-radius:8px; padding:9px 18px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:.2s; }
-.btn-primary:hover { background:var(--orange-dark); }
-.btn-secondary { background:transparent; color:var(--client-color); border:1.5px solid var(--client-color); border-radius:8px; padding:8px 16px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:.2s; }
-.btn-secondary:hover { background:rgba(242,101,34,.06); }
+.btn-primary { background:var(--brand); color:#0f0f0f; border:none; border-radius:8px; padding:9px 18px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:.2s; }
+.btn-primary:hover { background:var(--brand-dark); }
+.btn-secondary { background:transparent; color:var(--brand); border:1.5px solid var(--brand); border-radius:8px; padding:8px 16px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:.2s; }
+.btn-secondary:hover { background:var(--brand-dim); }
 .painel-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
 .painel-title { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; }
 .painel-sub { font-size:13px; color:var(--gray); }
@@ -165,7 +171,7 @@ td.pct { color:var(--gray); font-size:11px; }
 .master-table td { padding:12px 16px; border-bottom:1px solid var(--gray-light); font-size:13px; }
 .master-table tr:last-child td { border-bottom:none; }
 .master-table tr:hover td { background:#FAFAF8; }
-.link-btn { background:none; border:none; color:var(--client-color); font-size:13px; font-weight:600; cursor:pointer; padding:0; }
+.link-btn { background:none; border:none; color:var(--brand); font-size:13px; font-weight:600; cursor:pointer; padding:0; }
 .link-btn:hover { text-decoration:underline; }
 
 @media (max-width:900px) {
@@ -181,7 +187,7 @@ td.pct { color:var(--gray); font-size:11px; }
 <!-- LOGIN -->
 <div id="login-screen">
   <div class="login-box">
-    <div class="login-logo">StaffConnect</div>
+    <div class="login-logo">Staff Conect</div>
     <div class="login-sub">Dashboard Financeiro</div>
     <label class="login-label">Email</label>
     <input class="login-input" type="email" id="login-email" placeholder="seu@email.com" autocomplete="email">
@@ -204,7 +210,7 @@ td.pct { color:var(--gray); font-size:11px; }
   <!-- SIDEBAR -->
   <div class="sidebar">
     <div class="sidebar-logo">
-      <div class="logo-main" id="sidebar-logo-text">StaffConnect</div>
+      <div class="logo-main" id="sidebar-logo-text">Staff Conect</div>
       <div class="logo-sub">Dashboard Financeiro</div>
     </div>
     <div class="sidebar-client" id="sidebar-client-box" style="display:none">
@@ -214,7 +220,7 @@ td.pct { color:var(--gray); font-size:11px; }
     <div class="sidebar-nav" id="sidebar-nav">
       <!-- preenchido por JS conforme role -->
     </div>
-    <div class="sidebar-footer" id="sidebar-footer">StaffConnect · 2026</div>
+    <div class="sidebar-footer" id="sidebar-footer">Staff Conect · 2026</div>
   </div>
 
   <!-- MAIN -->
@@ -508,7 +514,7 @@ async function loadPainelMaster() {
         <td>${c.partner_id}</td>
         <td>${SEGMENT_LABEL[c.segment] || c.segment}</td>
         <td>${c.last_snapshot ? formatMonthLabel(c.last_snapshot) : '—'}</td>
-        <td>${c.last_snapshot ? '<span style="color:var(--green);font-weight:600">● OK</span>' : '<span style="color:var(--orange);font-weight:600">● Pendente</span>'}</td>
+        <td>${c.last_snapshot ? '<span style="color:var(--green);font-weight:600">● OK</span>' : '<span style="color:#f5a623;font-weight:600">● Pendente</span>'}</td>
         <td>
           <button class="link-btn" onclick="abrirCliente(${c.id})">Ver Dashboard</button>
           &nbsp;·&nbsp;
