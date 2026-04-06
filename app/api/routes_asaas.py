@@ -36,14 +36,18 @@ def _auto_register_webhook(client: AsaasClient, company_id: int) -> tuple:
         return False, msg
     webhook_url = f"{base_url}/asaas/webhook/{company_id}"
     try:
+        # Busca email da conta para campo obrigatório do Asaas
+        account_info = client.get_account_info()
+        email = account_info.get("email") or account_info.get("loginEmail") or "noreply@staffconsult.com.br"
+
         existing = client.list_webhooks()
         for wh in existing:
             if wh.get("url", "") == webhook_url:
                 logger.info(f"[ASAAS_WEBHOOK] Webhook já existe para company {company_id}, recriando")
                 client.delete_webhook(wh["id"])
                 break
-        client.create_webhook(webhook_url, WEBHOOK_EVENTS)
-        logger.info(f"[ASAAS_WEBHOOK] Webhook registrado com sucesso: {webhook_url}")
+        client.create_webhook(webhook_url, WEBHOOK_EVENTS, email=email)
+        logger.info(f"[ASAAS_WEBHOOK] Webhook registrado com sucesso: {webhook_url} (email={email})")
         return True, None
     except Exception as e:
         logger.error(f"[ASAAS_WEBHOOK] Falha ao registrar webhook: {e}")
