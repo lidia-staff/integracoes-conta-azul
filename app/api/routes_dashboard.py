@@ -263,14 +263,16 @@ def create_client(req: CreateClientRequest, user: dict = Depends(require_master_
     partner_id = req.partner_id
     if user["role"] == "partner":
         partner_id = user["partner_id"]
-    if not partner_id:
-        raise HTTPException(status_code=400, detail="partner_id obrigatório")
+    # Parceiro DEVE ter partner_id; Master pode criar sem parceiro (partner_id=None)
+    if not partner_id and user["role"] == "partner":
+        raise HTTPException(status_code=400, detail="partner_id obrigatório para parceiro")
 
     db = SessionLocal()
     try:
-        partner = db.query(DashPartner).filter(DashPartner.id == partner_id).first()
-        if not partner:
-            raise HTTPException(status_code=404, detail="Parceiro não encontrado")
+        if partner_id:
+            partner = db.query(DashPartner).filter(DashPartner.id == partner_id).first()
+            if not partner:
+                raise HTTPException(status_code=404, detail="Parceiro não encontrado")
 
         client = DashClient(
             partner_id=partner_id,

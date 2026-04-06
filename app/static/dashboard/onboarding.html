@@ -141,6 +141,16 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   <div class="card-title">Dados Básicos</div>
   <div class="card-sub">Informações gerais do novo cliente</div>
 
+  <!-- Seletor de parceiro — visível apenas para usuário Master -->
+  <div class="form-row single" id="row-partner" style="display:none">
+    <div class="form-group">
+      <label class="form-label">Parceiro *</label>
+      <select class="form-select" id="f-partner">
+        <option value="">Carregando parceiros...</option>
+      </select>
+    </div>
+  </div>
+
   <div class="form-row">
     <div class="form-group">
       <label class="form-label">Nome do cliente *</label>
@@ -275,6 +285,8 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 // ═══════════════════════════════════════════════════════════════════
 const S = {
   step: 1,
+  role: null,
+  partnerIdFromToken: null,
   clientId: null,      // criado na etapa 1
   oauthDone: false,
   ignoredAccounts: [],
@@ -323,12 +335,22 @@ async function step1Next() {
   const logo = document.getElementById('f-logo').value.trim() || null;
 
   if (!name) { showErr('err-1','Nome do cliente é obrigatório'); return; }
+
+  // Se Master, lê partner_id do seletor
+  let partner_id = S.partnerIdFromToken || null;
+  if (S.role === 'master') {
+    const sel = document.getElementById('f-partner');
+    const v = sel ? parseInt(sel.value) : NaN;
+    if (!isNaN(v) && v > 0) partner_id = v;
+    else partner_id = null; // Master sem parceiro é permitido
+  }
+
   hideErr('err-1');
 
   try {
-    const resp = await api('/dashboard/clients', 'POST', {
-      name, segment, primary_color: color, logo_url: logo
-    });
+    const body = { name, segment, primary_color: color, logo_url: logo };
+    if (partner_id) body.partner_id = partner_id;
+    const resp = await api('/dashboard/clients', 'POST', body);
     S.clientId = resp.id;
     goStep(2);
   } catch(e) {
@@ -555,11 +577,37 @@ function novoCliente() {
   goStep(1);
 }
 
-// Verifica login ao carregar
-window.addEventListener('DOMContentLoaded', () => {
+// Verifica login ao carregar e configura seletor de parceiro para Master
+window.addEventListener('DOMContentLoaded', async () => {
   if (!TOKEN) {
     window.location.href = '/dashboard';
+    return;
   }
+  // Decodifica role do token
+  try {
+    const payload = JSON.parse(atob(TOKEN.split('.')[1]));
+    S.role = payload.role;
+    S.partnerIdFromToken = payload.partner_id;
+
+    if (payload.role === 'master') {
+      // Mostra seletor de parceiro e carrega lista
+      document.getElementById('row-partner').style.display = '';
+      try {
+        const partners = await api('/dashboard/partners');
+        const sel = document.getElementById('f-partner');
+        if (partners.length === 0) {
+          sel.innerHTML = '<option value="">Nenhum parceiro cadastrado</option>';
+        } else {
+          sel.innerHTML = partners.map(p =>
+            `<option value="${p.id}">${p.name}</option>`
+          ).join('');
+        }
+      } catch(e) {
+        document.getElementById('f-partner').innerHTML =
+          '<option value="">Erro ao carregar parceiros</option>';
+      }
+    }
+  } catch(e) { /* token inválido → login cuida */ }
 });
 </script>
 </body>
