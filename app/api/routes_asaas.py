@@ -1,5 +1,6 @@
 import os
 import logging
+from datetime import datetime
 from typing import Optional
 from urllib.parse import urlparse
 from fastapi import APIRouter, Body, HTTPException
@@ -26,24 +27,26 @@ def _get_app_base_url() -> str:
     return ""
 
 
-def _auto_register_webhook(client: AsaasClient, company_id: int):
-    """Registra o webhook no Asaas automaticamente, removendo duplicatas."""
+def _auto_register_webhook(client: AsaasClient, company_id: int) -> bool:
+    """Registra o webhook no Asaas automaticamente, removendo duplicatas. Retorna True se ok."""
     base_url = _get_app_base_url()
     if not base_url:
         logger.warning("[ASAAS_WEBHOOK] APP_BASE_URL não configurada — webhook não registrado")
-        return
+        return False
     webhook_url = f"{base_url}/asaas/webhook/{company_id}"
     try:
         existing = client.list_webhooks()
         for wh in existing:
             if wh.get("url", "") == webhook_url:
-                logger.info(f"[ASAAS_WEBHOOK] Webhook já existe para company {company_id}, atualizando")
+                logger.info(f"[ASAAS_WEBHOOK] Webhook já existe para company {company_id}, recriando")
                 client.delete_webhook(wh["id"])
                 break
         client.create_webhook(webhook_url, WEBHOOK_EVENTS)
-        logger.info(f"[ASAAS_WEBHOOK] Webhook registrado: {webhook_url}")
+        logger.info(f"[ASAAS_WEBHOOK] Webhook registrado com sucesso: {webhook_url}")
+        return True
     except Exception as e:
         logger.error(f"[ASAAS_WEBHOOK] Falha ao registrar webhook: {e}")
+        return False
 
 router = APIRouter(tags=["asaas"])
 
@@ -84,9 +87,11 @@ def upsert_asaas_credentials(
         company = _get_company_or_404(db, company_id)
         _require_asaas_enabled(company)
         cred = db.query(AsaasCredential).filter(AsaasCredential.company_id == company_id).first()
+        now = datetime.utcnow()
         if cred:
             cred.api_key = api_key.strip()
             cred.environment = environment
+            cred.updated_at = now  # força atualização mesmo se o valor não mudou
         else:
             cred = AsaasCredential(company_id=company_id, api_key=api_key.strip(), environment=environment)
             db.add(cred)
@@ -94,8 +99,13 @@ def upsert_asaas_credentials(
         db.refresh(cred)
         # Registra webhook automaticamente no Asaas
         client = AsaasClient(api_key=cred.api_key, environment=cred.environment)
-        _auto_register_webhook(client, company_id)
-        return {"ok": True, "environment": cred.environment, "created_at": cred.created_at}
+        webhook_ok = _auto_register_webhook(client, company_id)
+        return {
+            "ok": True,
+            "environment": cred.environment,
+            "updated_at": cred.updated_at,
+            "webhook_registered": webhook_ok,
+        }
     finally:
         db.close()
 
