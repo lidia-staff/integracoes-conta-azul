@@ -1479,7 +1479,11 @@ async function saveAsaasCredentials() {
       body: JSON.stringify({ api_key: apiKey, environment: env }),
     });
     if (!res.ok) throw new Error((await res.json()).detail || 'Erro');
-    toast('Credencial salva!', 'success');
+    const data = await res.json();
+    const whMsg = data.webhook_registered
+      ? '✅ Credencial salva e webhook registrado no Asaas!'
+      : '⚠️ Credencial salva, mas falha ao registrar webhook no Asaas. Tente novamente.';
+    toast(whMsg, data.webhook_registered ? 'success' : 'error');
     document.getElementById('asaasApiKey').value = '';
     loadAsaasCredentials();
   } catch(e) {
