@@ -27,12 +27,13 @@ def _get_app_base_url() -> str:
     return ""
 
 
-def _auto_register_webhook(client: AsaasClient, company_id: int) -> bool:
-    """Registra o webhook no Asaas automaticamente, removendo duplicatas. Retorna True se ok."""
+def _auto_register_webhook(client: AsaasClient, company_id: int) -> tuple:
+    """Registra o webhook no Asaas automaticamente. Retorna (ok: bool, error: str|None)."""
     base_url = _get_app_base_url()
     if not base_url:
-        logger.warning("[ASAAS_WEBHOOK] APP_BASE_URL não configurada — webhook não registrado")
-        return False
+        msg = "APP_BASE_URL/CA_REDIRECT_URI não configurada"
+        logger.warning(f"[ASAAS_WEBHOOK] {msg}")
+        return False, msg
     webhook_url = f"{base_url}/asaas/webhook/{company_id}"
     try:
         existing = client.list_webhooks()
@@ -43,10 +44,10 @@ def _auto_register_webhook(client: AsaasClient, company_id: int) -> bool:
                 break
         client.create_webhook(webhook_url, WEBHOOK_EVENTS)
         logger.info(f"[ASAAS_WEBHOOK] Webhook registrado com sucesso: {webhook_url}")
-        return True
+        return True, None
     except Exception as e:
         logger.error(f"[ASAAS_WEBHOOK] Falha ao registrar webhook: {e}")
-        return False
+        return False, str(e)
 
 router = APIRouter(tags=["asaas"])
 
@@ -99,12 +100,13 @@ def upsert_asaas_credentials(
         db.refresh(cred)
         # Registra webhook automaticamente no Asaas
         client = AsaasClient(api_key=cred.api_key, environment=cred.environment)
-        webhook_ok = _auto_register_webhook(client, company_id)
+        webhook_ok, webhook_error = _auto_register_webhook(client, company_id)
         return {
             "ok": True,
             "environment": cred.environment,
             "updated_at": cred.updated_at,
             "webhook_registered": webhook_ok,
+            "webhook_error": webhook_error,
         }
     finally:
         db.close()
