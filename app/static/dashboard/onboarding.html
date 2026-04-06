@@ -234,7 +234,10 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   <div class="error-msg" id="err-3"></div>
   <div class="footer-nav">
     <button class="btn-back" onclick="goStep(2)">← Voltar</button>
-    <button class="btn-next" onclick="step3Next()">Próximo →</button>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="btn-back" onclick="goStep(4);buildBenchmarks()" title="Configurar filtros depois nas configurações do cliente">Pular esta etapa →</button>
+      <button class="btn-next" onclick="step3Next()">Salvar e Continuar →</button>
+    </div>
   </div>
 </div>
 
@@ -437,7 +440,9 @@ async function loadFiltros() {
         </label>`).join('');
     }
   } catch(e) {
-    showErr('err-3', 'Erro ao carregar filtros: ' + e.message);
+    showErr('err-3', 'Não foi possível carregar as listas do Conta Azul. Você pode pular esta etapa e configurar os filtros depois.');
+    document.getElementById('filter-contas').innerHTML = '<div class="filter-loading">Indisponível no momento</div>';
+    document.getElementById('filter-cats').innerHTML = '<div class="filter-loading">Indisponível no momento</div>';
   }
 }
 
