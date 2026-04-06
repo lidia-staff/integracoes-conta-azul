@@ -441,29 +441,45 @@ class ContaAzulClient:
     def list_categories_dre(self) -> list:
         """
         Lista categorias financeiras do Conta Azul, incluindo o campo entrada_dre.
-        Retorna lista completa paginando automaticamente.
+        Tenta os endpoints conhecidos da API CA e retorna lista completa.
         """
         print("[CA_CLIENT] list_categories_dre")
         all_items: list = []
-        page = 1
-        tamanho_pagina = 100
 
-        while True:
-            params = {"pagina": page, "tamanho_pagina": tamanho_pagina}
-            resp = self._request("GET", "/v1/categoria-financeira", params=params, timeout=30)
+        # Endpoints possíveis do CA para categorias — tenta em sequência
+        candidates = [
+            "/v1/plano-de-contas",
+            "/v1/categoria-lancamento",
+            "/v1/categoria",
+        ]
 
-            if isinstance(resp, list):
-                all_items.extend(resp)
-                break
-            elif isinstance(resp, dict):
-                items = resp.get("itens", resp.get("items", []))
-                total = resp.get("itens_totais", resp.get("total", 0))
-                all_items.extend(items)
-                if not items or len(all_items) >= total:
+        for endpoint in candidates:
+            try:
+                page = 1
+                tamanho_pagina = 100
+                found: list = []
+                while True:
+                    params = {"pagina": page, "tamanho_pagina": tamanho_pagina}
+                    resp = self._request("GET", endpoint, params=params, timeout=30)
+                    if isinstance(resp, list):
+                        found.extend(resp)
+                        break
+                    elif isinstance(resp, dict):
+                        items = resp.get("itens", resp.get("items", resp.get("data", [])))
+                        total = resp.get("itens_totais", resp.get("total", len(items)))
+                        found.extend(items)
+                        if not items or len(found) >= total:
+                            break
+                        page += 1
+                    else:
+                        break
+                if found:
+                    print(f"[CA_CLIENT] list_categories_dre: {len(found)} itens via {endpoint}")
+                    all_items = found
                     break
-                page += 1
-            else:
-                break
+            except Exception as e:
+                print(f"[CA_CLIENT] list_categories_dre {endpoint} falhou: {e}")
+                continue
 
         print(f"[CA_CLIENT] list_categories_dre total: {len(all_items)}")
         return all_items
