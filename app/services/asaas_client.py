@@ -56,7 +56,7 @@ class AsaasClient:
         data = self._request("GET", "/webhooks")
         return data.get("data", [])
 
-    def create_webhook(self, url: str, events: list, email: str, name: str = "CA Automação") -> dict:
+    def create_webhook(self, url: str, events: list, email: str, name: str = "Staff Conect") -> dict:
         """POST /webhooks — registra webhook para os eventos indicados."""
         payload = {
             "name": name,
