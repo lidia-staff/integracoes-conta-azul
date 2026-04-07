@@ -429,6 +429,100 @@ def debug_snapshot(client_id: int, user: dict = Depends(require_master)):
         db.close()
 
 
+@router.get("/ca/debug-raw/{client_id}")
+def debug_raw_transactions(
+    client_id: int,
+    mes: str = "2026-04",
+    user: dict = Depends(require_master),
+):
+    """
+    Debug: chama a API CA diretamente e retorna as primeiras 5 transações brutas.
+    Parâmetro ?mes=YYYY-MM (default: 2026-04)
+    """
+    import calendar as _cal
+    year, month = int(mes[:4]), int(mes[5:7])
+    last_day = _cal.monthrange(year, month)[1]
+    date_from = f"{year:04d}-{month:02d}-01"
+    date_to = f"{year:04d}-{month:02d}-{last_day:02d}"
+
+    try:
+        ca = DashboardCAClient(client_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao inicializar DashboardCAClient: {e}")
+
+    # Faz requisição bruta sem normalização para ver estrutura real
+    raw_receita = []
+    raw_despesa = []
+    errors = {}
+
+    for endpoint, situacao, key in [
+        ("/v1/conta-a-receber", "RECEBIDO", "receita"),
+        ("/v1/conta-a-pagar", "PAGO", "despesa"),
+    ]:
+        try:
+            params = {
+                "pagina": 1,
+                "tamanho_pagina": 5,
+                "situacao": situacao,
+                "dataPagamentoInicio": date_from,
+                "dataPagamentoFim": date_to,
+            }
+            resp = ca._request("GET", endpoint, params=params, timeout=30)
+            if key == "receita":
+                raw_receita = resp
+            else:
+                raw_despesa = resp
+        except Exception as e:
+            errors[key] = str(e)
+
+    # Extrai os primeiros itens independentemente da estrutura da resposta
+    def extract_items(resp):
+        if isinstance(resp, list):
+            return resp[:5]
+        if isinstance(resp, dict):
+            items = resp.get("itens", resp.get("items", resp.get("data", [])))
+            return items[:5]
+        return []
+
+    receita_items = extract_items(raw_receita)
+    despesa_items = extract_items(raw_despesa)
+
+    # Para cada item, mostra a estrutura completa da categoria
+    def analyze_item(item):
+        if not isinstance(item, dict):
+            return item
+        cat = (
+            item.get("categoriaFinanceira")
+            or item.get("categoria_financeira")
+            or item.get("categoria")
+            or {}
+        )
+        return {
+            "id": item.get("id"),
+            "descricao": item.get("descricao") or item.get("nome"),
+            "valor": item.get("valor"),
+            "dataPagamento": item.get("dataPagamento") or item.get("data_pagamento"),
+            "categoria_raw_keys": list(cat.keys()) if isinstance(cat, dict) else str(cat),
+            "categoria_id": cat.get("id") or cat.get("uuid"),
+            "categoria_nome": cat.get("nome") or cat.get("descricao"),
+            "entradaDre": cat.get("entradaDre"),
+            "entrada_dre": cat.get("entrada_dre"),
+            "categoria_completo": cat,
+        }
+
+    return {
+        "mes": mes,
+        "periodo": {"de": date_from, "ate": date_to},
+        "errors": errors,
+        "receitas_raw_type": type(raw_receita).__name__,
+        "despesas_raw_type": type(raw_despesa).__name__,
+        "receitas_total_campo": raw_receita.get("itens_totais") if isinstance(raw_receita, dict) else None,
+        "despesas_total_campo": raw_despesa.get("itens_totais") if isinstance(raw_despesa, dict) else None,
+        "receitas": [analyze_item(i) for i in receita_items],
+        "despesas": [analyze_item(i) for i in despesa_items],
+    }
+
+
 # ── DRE ──────────────────────────────────────────────────────────────
 
 
