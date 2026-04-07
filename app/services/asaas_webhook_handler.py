@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.db.session import SessionLocal
-from app.db.models import Company, AsaasCredential, AsaasProcessedEvent, AsaasExecutionLog
+from app.db.models import Company, AsaasCredential, AsaasProcessedEvent, AsaasExecutionLog, CompanyPaymentAccount
 from app.services.asaas_client import AsaasClient
 from app.services.conta_azul_client import ContaAzulClient
 from app.services.contaazul_people import get_or_create_customer_uuid_cached
@@ -127,6 +127,29 @@ def handle_payment_webhook(company_id: int, payload: dict) -> dict:
     return {"ok": True, "result": status}
 
 
+_ASAAS_BILLING_TO_CA_KEY = {
+    "BOLETO": "BOLETO",
+    "CREDIT_CARD": "CARTAO_CREDITO",
+    "DEBIT_CARD": "CARTAO_DEBITO",
+    "PIX": "PIX",
+    "TRANSFER": "TRANSFERENCIA",
+    "DEPOSIT": "DINHEIRO",
+}
+
+
+def _resolve_financial_account(db: Session, company: Company, billing_type: str) -> str | None:
+    """Resolve o id_conta do CA a partir do billingType do Asaas."""
+    ca_key = _ASAAS_BILLING_TO_CA_KEY.get((billing_type or "").upper())
+    if ca_key:
+        acc = db.query(CompanyPaymentAccount).filter_by(
+            company_id=company.id,
+            payment_method_key=ca_key,
+        ).first()
+        if acc:
+            return acc.ca_financial_account_id
+    return company.ca_financial_account_id or None
+
+
 def _sync_to_ca(
     company_id: int,
     payment: dict,
@@ -167,12 +190,19 @@ def _sync_to_ca(
     due_date = payment.get("dueDate") or payment.get("paymentDate") or datetime.utcnow().strftime("%Y-%m-%d")
     description = payment.get("description") or f"Pagamento Asaas {payment.get('id', '')}"
 
+    company = db.query(Company).filter_by(id=company_id).first()
+    billing_type = payment.get("billingType", "")
+    id_conta = _resolve_financial_account(db, company, billing_type)
+
     receivable_payload = {
         "id_pessoa": ca_customer_id,
         "descricao": description[:200],
         "valor": value,
         "data_vencimento": due_date,
+        "competencia": due_date[:7],  # YYYY-MM
     }
+    if id_conta:
+        receivable_payload["id_conta"] = id_conta
 
     receivable_resp = ca_client.create_receivable(receivable_payload)
     ca_receivable_id = (
