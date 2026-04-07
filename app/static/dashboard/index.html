@@ -509,7 +509,7 @@ async function loadPainelMaster() {
     tbody.innerHTML = clients.map(c => `
       <tr>
         <td><strong>${c.name}</strong></td>
-        <td>${c.partner_id}</td>
+        <td>${c.partner_name || c.partner_id || '—'}</td>
         <td>${SEGMENT_LABEL[c.segment] || c.segment}</td>
         <td>${c.last_snapshot ? formatMonthLabel(c.last_snapshot) : '—'}</td>
         <td>${c.last_snapshot ? '<span style="color:var(--green);font-weight:600">● OK</span>' : '<span style="color:#f5a623;font-weight:600">● Pendente</span>'}</td>

@@ -242,9 +242,11 @@ def list_clients(user: dict = Depends(get_current_user)):
                 .order_by(DashSnapshot.snapshot_month.desc())
                 .first()
             )
+            partner = db.query(DashPartner).filter(DashPartner.id == c.partner_id).first() if c.partner_id else None
             result.append({
                 "id": c.id,
                 "partner_id": c.partner_id,
+                "partner_name": partner.name if partner else "—",
                 "name": c.name,
                 "segment": c.segment,
                 "logo_url": c.logo_url,
