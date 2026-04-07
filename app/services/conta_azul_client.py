@@ -394,48 +394,88 @@ class ContaAzulClient:
         date_from: str,
         date_to: str,
         tipo: str | None = None,
-        pagina: int = 1,
-        tamanho_pagina: int = 100,
     ) -> list:
         """
-        Lista lançamentos financeiros liquidados filtrados por data de pagamento.
+        Lista movimentos financeiros liquidados filtrados por data de pagamento.
+
+        Usa /v1/conta-a-receber (RECEBIDO) e /v1/conta-a-pagar (PAGO) —
+        os endpoints reais da API Conta Azul para Visão Caixa.
 
         date_from / date_to: "YYYY-MM-DD"
         tipo: "Receita" | "Despesa" | None (ambos)
-        Retorna lista completa paginando automaticamente.
         """
         print(f"[CA_CLIENT] list_transactions {date_from} → {date_to} tipo={tipo}")
         all_items: list = []
-        page = pagina
 
-        while True:
-            params: dict = {
-                "pagina": page,
-                "tamanho_pagina": tamanho_pagina,
-                "data_pagamento_de": date_from,
-                "data_pagamento_ate": date_to,
-                "situacao": "LIQUIDADO",
-            }
-            if tipo:
-                params["tipo"] = tipo
+        # Endpoints a consultar conforme tipo solicitado
+        endpoints_cfg = []
+        if tipo is None or tipo == "Receita":
+            endpoints_cfg.append(("/v1/conta-a-receber", "RECEBIDO", "Receita"))
+        if tipo is None or tipo == "Despesa":
+            endpoints_cfg.append(("/v1/conta-a-pagar", "PAGO", "Despesa"))
 
-            resp = self._request("GET", "/v1/lancamento", params=params, timeout=30)
+        for endpoint, situacao, tipo_tx in endpoints_cfg:
+            page = 1
+            while True:
+                params: dict = {
+                    "pagina": page,
+                    "tamanho_pagina": 100,
+                    "situacao": situacao,
+                    "dataPagamentoInicio": date_from,
+                    "dataPagamentoFim": date_to,
+                }
+                try:
+                    resp = self._request("GET", endpoint, params=params, timeout=30)
+                except Exception as e:
+                    print(f"[CA_CLIENT] {endpoint} erro: {e}")
+                    break
 
-            if isinstance(resp, list):
-                all_items.extend(resp)
-                break
-            elif isinstance(resp, dict):
-                items = resp.get("itens", resp.get("items", []))
-                total = resp.get("itens_totais", resp.get("total", 0))
-                all_items.extend(items)
-                print(f"[CA_CLIENT] list_transactions página {page}: +{len(items)} | total {len(all_items)}/{total}")
-                if not items or len(all_items) >= total:
+                raw_items: list = []
+                total = 0
+                if isinstance(resp, list):
+                    raw_items = resp
+                    total = len(resp)
+                elif isinstance(resp, dict):
+                    raw_items = resp.get("itens", resp.get("items", resp.get("data", [])))
+                    total = resp.get("itens_totais", resp.get("total", len(raw_items)))
+
+                for item in raw_items:
+                    # Normaliza para estrutura uniforme usada pelo snapshot
+                    cat_obj = (
+                        item.get("categoriaFinanceira")
+                        or item.get("categoria_financeira")
+                        or item.get("categoria")
+                        or {}
+                    )
+                    conta_obj = (
+                        item.get("contaFinanceira")
+                        or item.get("conta_financeira")
+                        or {}
+                    )
+                    all_items.append({
+                        "id": item.get("id"),
+                        "descricao": item.get("descricao") or item.get("nome") or "",
+                        "valor": float(item.get("valor") or item.get("valor_liquido") or 0),
+                        "tipo": tipo_tx,
+                        "conta_financeira_id": str(conta_obj.get("id") or conta_obj.get("uuid") or ""),
+                        "categoria_id": str(cat_obj.get("id") or cat_obj.get("uuid") or ""),
+                        "categoria_nome": cat_obj.get("nome") or cat_obj.get("descricao") or item.get("descricao") or "",
+                        # entrada_dre embutido — evita precisar do endpoint de categorias
+                        "entrada_dre_raw": (
+                            cat_obj.get("entradaDre")
+                            or cat_obj.get("entrada_dre")
+                            or ""
+                        ),
+                        "data_pagamento": item.get("dataPagamento") or item.get("data_pagamento") or "",
+                    })
+
+                print(f"[CA_CLIENT] {endpoint} pág {page}: +{len(raw_items)} | acumulado {len(all_items)}")
+                page_fetched = len([x for x in all_items if x["tipo"] == tipo_tx])
+                if isinstance(resp, list) or not raw_items or page_fetched >= total:
                     break
                 page += 1
-            else:
-                break
 
-        print(f"[CA_CLIENT] list_transactions total carregado: {len(all_items)}")
+        print(f"[CA_CLIENT] list_transactions total: {len(all_items)}")
         return all_items
 
     def list_categories_dre(self) -> list:

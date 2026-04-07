@@ -151,11 +151,20 @@ def aggregate_transactions(
             continue
 
         # Resolve categoria
-        cat_id = str(tx.get("categoria_id") or tx.get("categoria", {}).get("id", "") if isinstance(tx.get("categoria"), dict) else tx.get("categoria_id", ""))
+        cat_raw = tx.get("categoria") or {}
+        cat_id = str(
+            tx.get("categoria_id")
+            or (cat_raw.get("id") if isinstance(cat_raw, dict) else "")
+            or ""
+        )
         if cat_id in ignored_categories:
             continue
 
-        entrada_dre_raw = category_map.get(cat_id, "")
+        # Tenta entrada_dre embutida na transação (nova API) ou via category_map (legado)
+        entrada_dre_raw = (
+            tx.get("entrada_dre_raw")
+            or category_map.get(cat_id, "")
+        )
         dre_field = ENTRADA_DRE_MAP.get(entrada_dre_raw.upper() if entrada_dre_raw else "")
         if not dre_field:
             continue  # categoria sem mapeamento DRE — ignora

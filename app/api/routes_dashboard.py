@@ -328,6 +328,23 @@ def update_client(
         db.close()
 
 
+@router.delete("/clients/{client_id}")
+def delete_client(client_id: int, _: dict = Depends(require_master)):
+    """Remove cliente e todos os snapshots associados. Apenas Master."""
+    db = SessionLocal()
+    try:
+        client = db.query(DashClient).filter(DashClient.id == client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Cliente não encontrado")
+        # Remove snapshots primeiro (FK)
+        db.query(DashSnapshot).filter(DashSnapshot.client_id == client_id).delete()
+        db.delete(client)
+        db.commit()
+        return {"ok": True, "deleted": client_id}
+    finally:
+        db.close()
+
+
 # ── OAuth callback para Dashboard ────────────────────────────────────
 
 
