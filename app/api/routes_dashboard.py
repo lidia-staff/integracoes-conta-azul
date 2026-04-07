@@ -455,75 +455,64 @@ def debug_raw_transactions(
     raw_despesa = []
     errors = {}
 
-    for endpoint, status_val, key in [
-        ("/v1/financeiro/eventos-financeiros/contas-a-receber/buscar", "RECEBIDO", "receita"),
-        ("/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar", "QUITADO", "despesa"),  # CA v2: QUITADO = pago
-    ]:
+    year_from = year - 5
+    year_to = year + 2
+
+    # Receitas: status RECEBIDO funciona na CA v2
+    try:
+        params_rec = {
+            "pagina": 1, "tamanho_pagina": 3,
+            "status": "RECEBIDO",
+            "data_vencimento_de": f"{year_from}-01-01",
+            "data_vencimento_ate": f"{year_to}-12-31",
+            "data_pagamento_de": date_from,
+            "data_pagamento_ate": date_to,
+        }
+        raw_receita = ca._request("GET", "/v1/financeiro/eventos-financeiros/contas-a-receber/buscar", params=params_rec, timeout=30)
+    except Exception as e:
+        errors["receita"] = str(e)
+
+    # Despesas: testa múltiplos valores de status para descobrir o correto
+    status_despesa_tentativas = ["LIQUIDADO", "PAGO", "QUITADO", "BAIXADO"]
+    despesa_status_ok = None
+    for st in status_despesa_tentativas:
         try:
-            year_from = year - 5
-            year_to = year + 2
-            params = {
-                "pagina": 1,
-                "tamanho_pagina": 5,
-                "status": status_val,
+            params_desp = {
+                "pagina": 1, "tamanho_pagina": 3,
+                "status": st,
                 "data_vencimento_de": f"{year_from}-01-01",
                 "data_vencimento_ate": f"{year_to}-12-31",
                 "data_pagamento_de": date_from,
                 "data_pagamento_ate": date_to,
             }
-            resp = ca._request("GET", endpoint, params=params, timeout=30)
-            if key == "receita":
-                raw_receita = resp
-            else:
-                raw_despesa = resp
+            raw_despesa = ca._request("GET", "/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar", params=params_desp, timeout=30)
+            despesa_status_ok = st
+            break
         except Exception as e:
-            errors[key] = str(e)
+            errors[f"despesa_status_{st}"] = str(e)
 
     # Extrai os primeiros itens independentemente da estrutura da resposta
     def extract_items(resp):
         if isinstance(resp, list):
-            return resp[:5]
+            return resp[:3]
         if isinstance(resp, dict):
             items = resp.get("itens", resp.get("items", resp.get("data", [])))
-            return items[:5]
+            return items[:3]
         return []
 
     receita_items = extract_items(raw_receita)
     despesa_items = extract_items(raw_despesa)
 
-    # Para cada item, mostra a estrutura completa da categoria
-    def analyze_item(item):
-        if not isinstance(item, dict):
-            return item
-        cat = (
-            item.get("categoriaFinanceira")
-            or item.get("categoria_financeira")
-            or item.get("categoria")
-            or {}
-        )
-        return {
-            "id": item.get("id"),
-            "descricao": item.get("descricao") or item.get("nome"),
-            "valor": item.get("valor"),
-            "dataPagamento": item.get("dataPagamento") or item.get("data_pagamento"),
-            "categoria_raw_keys": list(cat.keys()) if isinstance(cat, dict) else str(cat),
-            "categoria_id": cat.get("id") or cat.get("uuid"),
-            "categoria_nome": cat.get("nome") or cat.get("descricao"),
-            "entradaDre": cat.get("entradaDre"),
-            "entrada_dre": cat.get("entrada_dre"),
-            "categoria_completo": cat,
-        }
-
     return {
         "mes": mes,
         "periodo": {"de": date_from, "ate": date_to},
         "errors": errors,
-        "receitas_raw_type": type(raw_receita).__name__,
-        "despesas_raw_type": type(raw_despesa).__name__,
-        "receitas_total_campo": raw_receita.get("itens_totais") if isinstance(raw_receita, dict) else None,
-        "despesas_total_campo": raw_despesa.get("itens_totais") if isinstance(raw_despesa, dict) else None,
-        "receitas": [analyze_item(i) for i in receita_items],
-        "despesas": [analyze_item(i) for i in despesa_items],
+        "receitas_total": raw_receita.get("itens_totais") if isinstance(raw_receita, dict) else len(raw_receita) if isinstance(raw_receita, list) else 0,
+        "despesas_total": raw_despesa.get("itens_totais") if isinstance(raw_despesa, dict) else len(raw_despesa) if isinstance(raw_despesa, list) else 0,
+        "despesa_status_que_funcionou": despesa_status_ok,
+        # Estrutura COMPLETA dos primeiros itens para inspecionar campos reais
+        "receitas_raw": receita_items,
+        "despesas_raw": despesa_items,
     }
 
 
