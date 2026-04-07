@@ -402,22 +402,31 @@ def list_ca_categories(client_id: int, user: dict = Depends(require_master_or_pa
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/ca/debug-transactions/{client_id}")
-def debug_transactions(client_id: int, mes: str = "2026-04", user: dict = Depends(require_master)):
-    """Debug: retorna amostra de transações brutas do CA para inspecionar campos."""
-    _check_client_access(client_id, user)
-    from app.services.dashboard_service import month_date_range
-    date_from, date_to = month_date_range(mes)
-    ca = DashboardCAClient(client_id)
-    txs = ca.list_transactions(date_from=date_from, date_to=date_to)
-    # Retorna amostra com campos relevantes para diagnóstico
-    sample = txs[:20]
-    entrada_dre_values = list({tx.get("entrada_dre_raw", "") for tx in txs})
-    return {
-        "total": len(txs),
-        "entrada_dre_values_found": entrada_dre_values,
-        "sample": sample,
-    }
+@router.get("/ca/debug-snapshot/{client_id}")
+def debug_snapshot(client_id: int, user: dict = Depends(require_master)):
+    """Debug: retorna JSON bruto do snapshot salvo no banco."""
+    db = SessionLocal()
+    try:
+        snaps = (
+            db.query(DashSnapshot)
+            .filter(DashSnapshot.client_id == client_id)
+            .order_by(DashSnapshot.snapshot_month.desc())
+            .all()
+        )
+        if not snaps:
+            return {"error": "Nenhum snapshot encontrado", "client_id": client_id}
+        return {
+            "total_snapshots": len(snaps),
+            "snapshots": [
+                {
+                    "month": s.snapshot_month,
+                    "data": json.loads(s.data_json) if s.data_json else {},
+                }
+                for s in snaps
+            ],
+        }
+    finally:
+        db.close()
 
 
 # ── DRE ──────────────────────────────────────────────────────────────
