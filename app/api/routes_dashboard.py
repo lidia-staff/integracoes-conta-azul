@@ -242,9 +242,11 @@ def list_clients(user: dict = Depends(get_current_user)):
                 .order_by(DashSnapshot.snapshot_month.desc())
                 .first()
             )
+            partner = db.query(DashPartner).filter(DashPartner.id == c.partner_id).first() if c.partner_id else None
             result.append({
                 "id": c.id,
                 "partner_id": c.partner_id,
+                "partner_name": partner.name if partner else "—",
                 "name": c.name,
                 "segment": c.segment,
                 "logo_url": c.logo_url,
@@ -398,6 +400,24 @@ def list_ca_categories(client_id: int, user: dict = Depends(require_master_or_pa
         return {"categorias": cats}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ca/debug-transactions/{client_id}")
+def debug_transactions(client_id: int, mes: str = "2026-04", user: dict = Depends(require_master)):
+    """Debug: retorna amostra de transações brutas do CA para inspecionar campos."""
+    _check_client_access(client_id, user)
+    from app.services.dashboard_service import month_date_range
+    date_from, date_to = month_date_range(mes)
+    ca = DashboardCAClient(client_id)
+    txs = ca.list_transactions(date_from=date_from, date_to=date_to)
+    # Retorna amostra com campos relevantes para diagnóstico
+    sample = txs[:20]
+    entrada_dre_values = list({tx.get("entrada_dre_raw", "") for tx in txs})
+    return {
+        "total": len(txs),
+        "entrada_dre_values_found": entrada_dre_values,
+        "sample": sample,
+    }
 
 
 # ── DRE ──────────────────────────────────────────────────────────────
