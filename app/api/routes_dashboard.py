@@ -460,10 +460,14 @@ def debug_raw_transactions(
         ("/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar", "PAGO", "despesa"),
     ]:
         try:
+            year_from = year - 5
+            year_to = year + 2
             params = {
                 "pagina": 1,
                 "tamanho_pagina": 5,
                 "status": status_val,
+                "data_vencimento_de": f"{year_from}-01-01",
+                "data_vencimento_ate": f"{year_to}-12-31",
                 "data_pagamento_de": date_from,
                 "data_pagamento_ate": date_to,
             }

@@ -426,10 +426,18 @@ class ContaAzulClient:
         for endpoint, status_val, tipo_tx in endpoints_cfg:
             page = 1
             while True:
+                # data_vencimento_de é obrigatório pela API CA v2.
+                # Usamos range largo (5 anos atrás → 2 anos à frente) para cobrir
+                # títulos vencidos em meses anteriores mas pagos no mês alvo.
+                # O filtro real de caixa vem de data_pagamento_de/ate.
+                year_from = int(date_from[:4]) - 5
+                year_to = int(date_to[:4]) + 2
                 params: dict = {
                     "pagina": page,
                     "tamanho_pagina": 100,
                     "status": status_val,
+                    "data_vencimento_de": f"{year_from}-01-01",
+                    "data_vencimento_ate": f"{year_to}-12-31",
                     "data_pagamento_de": date_from,
                     "data_pagamento_ate": date_to,
                 }
