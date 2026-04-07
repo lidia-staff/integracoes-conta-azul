@@ -163,20 +163,32 @@
         <h2>Dashboard</h2>
         <p>Visão geral das vendas e configurações</p>
       </div>
-      <div class="stats">
-        <div class="stat">
-          <div class="stat-value" id="stat-total">—</div>
-          <div class="stat-label">Total de Vendas</div>
+
+      <!-- Blocos de módulos -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px" id="module-blocks">
+
+        <!-- Bloco Vendas -->
+        <div class="card" id="block-vendas" style="margin-bottom:0">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <span>📤 Vendas → Conta Azul</span>
+          </div>
+          <div id="vendas-block-content">
+            <div class="empty-state"><div class="spinner"></div></div>
+          </div>
         </div>
-        <div class="stat">
-          <div class="stat-value" id="stat-enviadas">—</div>
-          <div class="stat-label">Enviadas ao CA</div>
+
+        <!-- Bloco Asaas -->
+        <div class="card" id="block-asaas" style="margin-bottom:0">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <span>💰 Asaas → Conta Azul</span>
+          </div>
+          <div id="asaas-block-content">
+            <div class="empty-state"><div class="spinner"></div></div>
+          </div>
         </div>
-        <div class="stat">
-          <div class="stat-value" id="stat-erros" style="color:var(--danger)">—</div>
-          <div class="stat-label">Com Erro</div>
-        </div>
+
       </div>
+
       <div class="card">
         <div class="card-title">Status da Empresa</div>
         <div id="company-status">
@@ -639,29 +651,87 @@ async function refreshAsaasNavVisibility() {
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────
+function _statsMini(total, ok, erros, okLabel, lastLine) {
+  return `
+    <div style="display:flex;gap:12px;margin-bottom:${lastLine?'10':'0'}px">
+      <div style="flex:1;text-align:center;background:var(--surface2);border-radius:var(--radius);padding:10px 6px">
+        <div style="font-size:22px;font-weight:700">${total}</div>
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Total</div>
+      </div>
+      <div style="flex:1;text-align:center;background:var(--surface2);border-radius:var(--radius);padding:10px 6px">
+        <div style="font-size:22px;font-weight:700;color:var(--accent)">${ok}</div>
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">${okLabel}</div>
+      </div>
+      <div style="flex:1;text-align:center;background:var(--surface2);border-radius:var(--radius);padding:10px 6px">
+        <div style="font-size:22px;font-weight:700;color:var(--danger)">${erros}</div>
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Erros</div>
+      </div>
+    </div>
+    ${lastLine ? `<div style="font-size:11px;color:var(--muted)">${lastLine}</div>` : ''}`;
+}
+
+function _lockedBlock(label, desc) {
+  return `
+    <div style="text-align:center;padding:12px 0;opacity:.6">
+      <div style="font-size:28px;margin-bottom:8px">🔒</div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px">${label}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">${desc}</div>
+      <button class="btn btn-secondary btn-sm" onclick="showPage('config')">⚙️ Ativar em Configurações</button>
+    </div>`;
+}
+
 async function loadDashboard() {
   if (!currentCompanyId) return;
-  
+
   try {
-    const [salesRes, companyRes, mappingRes] = await Promise.all([
+    const requests = [
       fetch(`${API}/v1/sales?company_id=${currentCompanyId}`),
       fetch(`${API}/v1/companies/${currentCompanyId}`),
       fetch(`${API}/v1/companies/${currentCompanyId}/payment-accounts`),
-    ]);
-    
+    ];
+    const [salesRes, companyRes, mappingRes] = await Promise.all(requests);
+
     const sales = await salesRes.json();
     const company = await companyRes.json();
     const mapping = await mappingRes.json();
-    
-    // Stats
-    const total = sales.length;
-    const enviadas = sales.filter(s => s.status === 'ENVIADA_CA').length;
-    const erros = sales.filter(s => s.status === 'ERRO_ENVIO_CA').length;
-    document.getElementById('stat-total').textContent = total;
-    document.getElementById('stat-enviadas').textContent = enviadas;
-    document.getElementById('stat-erros').textContent = erros;
-    
-    // Status empresa
+
+    // ── Bloco Vendas ──────────────────────────────────────────────
+    if (company.upload_enabled !== false) {
+      const total = sales.length;
+      const enviadas = sales.filter(s => s.status === 'ENVIADA_CA').length;
+      const erros = sales.filter(s => s.status === 'ERRO_ENVIO_CA').length;
+      document.getElementById('vendas-block-content').innerHTML =
+        _statsMini(total, enviadas, erros, 'Enviadas');
+    } else {
+      document.getElementById('vendas-block-content').innerHTML =
+        _lockedBlock('Input de Vendas', 'Faça upload de planilhas e envie vendas direto ao Conta Azul');
+    }
+
+    // ── Bloco Asaas ───────────────────────────────────────────────
+    if (company.asaas_enabled) {
+      try {
+        const logsRes = await fetch(`${API}/v1/companies/${currentCompanyId}/asaas/logs?limit=200`);
+        const logsData = await logsRes.json();
+        const logs = Array.isArray(logsData) ? logsData : (logsData.logs || []);
+        const total = logs.length;
+        const sucesso = logs.filter(l => l.status === 'success').length;
+        const erros = logs.filter(l => l.status === 'error').length;
+        const last = logs[0];
+        const lastLine = last
+          ? `Último: ${new Date(last.created_at).toLocaleString('pt-BR')} · <span style="font-family:monospace">${last.asaas_payment_id || '—'}</span>`
+          : 'Aguardando primeiro pagamento...';
+        document.getElementById('asaas-block-content').innerHTML =
+          _statsMini(total, sucesso, erros, 'Sucesso', lastLine);
+      } catch(_) {
+        document.getElementById('asaas-block-content').innerHTML =
+          '<p style="font-size:12px;color:var(--muted)">Erro ao carregar logs Asaas.</p>';
+      }
+    } else {
+      document.getElementById('asaas-block-content').innerHTML =
+        _lockedBlock('Integração Asaas', 'Receba pagamentos do Asaas e lance automaticamente no Conta Azul');
+    }
+
+    // ── Status empresa ────────────────────────────────────────────
     const hasToken = company.has_token;
     const hasAccount = company.ca_financial_account_id;
     document.getElementById('company-status').innerHTML = `
@@ -673,8 +743,8 @@ async function loadDashboard() {
         </div>
         ${!hasToken ? `<a href="/api/contaazul/start?company_id=${currentCompanyId}" target="_blank" class="btn btn-secondary btn-sm" style="width:fit-content">🔐 Autorizar Conta Azul</a>` : ''}
       </div>`;
-    
-    // Mapeamentos
+
+    // ── Mapeamentos ───────────────────────────────────────────────
     const maps = Array.isArray(mapping) ? mapping : (mapping.mappings || []);
     if (maps.length === 0) {
       document.getElementById('payment-mapping-summary').innerHTML =
