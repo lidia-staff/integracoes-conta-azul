@@ -168,6 +168,23 @@ def ping_asaas(company_id: int):
         raise HTTPException(status_code=502, detail=f"Falha ao conectar no Asaas: {str(e)}")
 
 
+@router.get("/companies/{company_id}/asaas/webhooks")
+def list_asaas_webhooks(company_id: int):
+    """Lista os webhooks cadastrados no Asaas para esta empresa."""
+    db: Session = SessionLocal()
+    try:
+        _get_company_or_404(db, company_id)
+        cred = _get_credential_or_404(db, company_id)
+        client = AsaasClient(api_key=cred.api_key, environment=cred.environment)
+    finally:
+        db.close()
+    try:
+        webhooks = client.list_webhooks()
+        return {"ok": True, "webhooks": webhooks}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Falha ao listar webhooks: {str(e)}")
+
+
 # ──────────────────────────────────────────────
 # Logs de execução
 # ──────────────────────────────────────────────
