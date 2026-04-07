@@ -419,7 +419,7 @@ class ContaAzulClient:
         if tipo is None or tipo == "Despesa":
             endpoints_cfg.append((
                 "/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar",
-                "PAGO",
+                "QUITADO",   # CA v2: QUITADO = pago/liquidado (não PAGO)
                 "Despesa",
             ))
 

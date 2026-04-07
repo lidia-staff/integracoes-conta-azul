@@ -457,7 +457,7 @@ def debug_raw_transactions(
 
     for endpoint, status_val, key in [
         ("/v1/financeiro/eventos-financeiros/contas-a-receber/buscar", "RECEBIDO", "receita"),
-        ("/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar", "PAGO", "despesa"),
+        ("/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar", "QUITADO", "despesa"),  # CA v2: QUITADO = pago
     ]:
         try:
             year_from = year - 5
