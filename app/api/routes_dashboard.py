@@ -455,17 +455,17 @@ def debug_raw_transactions(
     raw_despesa = []
     errors = {}
 
-    for endpoint, situacao, key in [
-        ("/v1/conta-a-receber", "RECEBIDO", "receita"),
-        ("/v1/conta-a-pagar", "PAGO", "despesa"),
+    for endpoint, status_val, key in [
+        ("/v1/financeiro/eventos-financeiros/contas-a-receber/buscar", "RECEBIDO", "receita"),
+        ("/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar", "PAGO", "despesa"),
     ]:
         try:
             params = {
                 "pagina": 1,
                 "tamanho_pagina": 5,
-                "situacao": situacao,
-                "dataPagamentoInicio": date_from,
-                "dataPagamentoFim": date_to,
+                "status": status_val,
+                "data_pagamento_de": date_from,
+                "data_pagamento_ate": date_to,
             }
             resp = ca._request("GET", endpoint, params=params, timeout=30)
             if key == "receita":
