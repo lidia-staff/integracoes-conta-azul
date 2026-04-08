@@ -136,56 +136,99 @@ def _nome_to_dre_field(nome: str, tipo_tx: str) -> str | None:
     n = (nome or "").lower()
 
     if tipo_tx == "Receita":
-        # Impostos sobre receita ficam em IMPOSTOS
         if any(k in n for k in ["imposto", "tributo", "iss ", "das ", "simples", "cofins", "pis/", "irpj", "csll"]):
             return "IMPOSTOS"
         if any(k in n for k in ["juros recebido", "rendimento", "aplicação", "financeiro"]):
             return "RECEITAS_FINANCEIRAS"
-        # Toda receita operacional → FATURAMENTO_BRUTO
+        # Receitas que não são operacionais → OUTRAS_RECEITAS
+        if any(k in n for k in ["reembolso", "sublocação", "sublocacao", "a identificar",
+                                  "devolução", "devolucao", "estorno"]):
+            return "OUTRAS_RECEITAS"
         return "FATURAMENTO_BRUTO"
 
-    # Despesas
+    # ── Despesas ─────────────────────────────────────────────────────
+    # 1. Pessoal (4.03 + 4.04) — verificar antes de qualquer outra regra
     if any(k in n for k in ["salário", "salario", "folha", "funcionário", "funcionario",
                               "férias", "ferias", "13º", "fgts", "inss", "clt", "pessoal",
                               "benefício", "beneficio", "vale", "pró-labore", "pro-labore",
-                              "pro labore"]):
+                              "pro labore", "gratificação", "gratificacao", "rescisão",
+                              "rescisao", "remuneração", "remuneracao", "autônomo", "autonomo",
+                              "exame médico", "exame medico", "cursos e treinamento",
+                              "treinamento", "confraterniz"]):
         return "DEPTO_PESSOAL"
-    if any(k in n for k in ["retirada", "distribuição de lucro", "distribuicao de lucro",
-                              "distribuição sócio", "socio", "sócio"]):
+
+    # 2. Retirada de sócio (4.09)
+    if any(k in n for k in ["retirada", "antecipação de lucro", "antecipacao de lucro",
+                              "distribuição de lucro", "distribuicao de lucro",
+                              "distribuição sócio", "antecipação", "antecipacao",
+                              "pro-labore sócio", "pro labore socio"]):
         return "RETIRADA_SOCIO"
-    if any(k in n for k in ["aluguel", "imóvel", "imovel", "locação", "locacao",
-                              "condomínio", "condominio", "iptu", "arrendamento"]):
-        return "IMOVEL"
-    if any(k in n for k in ["marketing", "publicidade", "propaganda", "mídia", "midia",
-                              "anúncio", "anuncio", "google ads", "facebook", "instagram ads",
-                              "influencer", "panfleto", "impulsionamento"]):
-        return "MARKETING"
-    if any(k in n for k in ["imposto", "tributo", "iss", "das ", "simples nacional",
-                              "cofins", "pis", "irpj", "csll", "iof", "icms", "darf"]):
-        return "IMPOSTOS"
-    if any(k in n for k in ["juros", "tarifa bancária", "tarifa bancaria", "iof",
-                              "multa financeira", "encargo", "banco ", "cartão banco",
-                              "taxa bancária", "taxa bancaria", "anuidade"]):
-        return "DESPESAS_FINANCEIRAS"
-    if any(k in n for k in ["investimento", "equipamento", "máquina", "maquina",
-                              "imobilizado", "capex", "compra de ativo"]):
-        return "INVESTIMENTOS"
+
+    # 3. Custos diretos (4.02) — antes de COMERCIAIS para evitar falso positivo em "comissões clínica"
     if any(k in n for k in ["custo produto", "custo de serviço", "custo serviço",
-                              "custo dos serviços", "materiais aplicados", "materiais na prestação",
-                              "material aplicado", "insumo", "produto revendido",
-                              "mercadoria", "estoque", "matéria-prima", "materia-prima",
+                              "custo dos serviços", "custo paciente", "clinica parceira",
+                              "clínica parceira", "materiais aplicados", "materiais na prestação",
+                              "material aplicado", "materiais para revenda", "insumo",
+                              "produto revendido", "mercadoria", "estoque",
+                              "matéria-prima", "materia-prima",
                               "custo variável", "custo variavel"]):
         return "CUSTOS_TOTAIS"
-    if any(k in n for k in ["comissão", "comissao", "vendedor", "representante"]):
+
+    # 4. Imóvel (4.08) — antes de ADMINISTRATIVAS para evitar "energia elétrica", "manutenção predial"
+    if any(k in n for k in ["aluguel", "imóvel", "imovel", "locação", "locacao",
+                              "condomínio", "condominio", "iptu", "arrendamento",
+                              "energia elétrica", "energia eletrica",
+                              "taxa de lixo", "taxa lixo", "lixo",
+                              "manutenção predial", "manutencao predial", "predial",
+                              "vigilância", "vigilancia", "segurança patrimonial",
+                              "seguranca patrimonial"]):
+        return "IMOVEL"
+
+    # 5. Marketing (4.07)
+    if any(k in n for k in ["marketing", "publicidade", "propaganda", "mídia", "midia",
+                              "anúncio", "anuncio", "google ads", "facebook", "instagram ads",
+                              "influencer", "panfleto", "impulsionamento",
+                              "social media", "tráfego pago", "trafego pago", "trafego"]):
+        return "MARKETING"
+
+    # 6. Impostos (4.01) — "iss " com espaço para não colidir com "comissões"
+    if any(k in n for k in ["imposto", "tributo", "iss ", "das ", "simples nacional",
+                              "cofins", "pis", "irpj", "csll", "iof", "icms", "darf"]):
+        return "IMPOSTOS"
+
+    # 7. Despesas financeiras (4.11)
+    if any(k in n for k in ["juros", "tarifa bancária", "tarifa bancaria",
+                              "tarifas bancárias", "tarifas bancarias",
+                              "tarifa doc", "tarifas doc", "doc/ted", "doc / ted",
+                              "tarifa ted", "tarifa ", "tarifas ",
+                              "multa financeira", "encargo financeiro", "banco ",
+                              "cartão banco", "taxa bancária", "taxa bancaria", "anuidade"]):
+        return "DESPESAS_FINANCEIRAS"
+
+    # 8. Investimentos (5.01) — apenas aquisições reais, sem "manutenção"
+    if "manutenç" not in n and "manutenc" not in n:
+        if any(k in n for k in ["investimento", "máquina", "maquina",
+                                  "imobilizado", "capex", "compra de ativo",
+                                  "bem imobilizado", "instalações industriais"]):
+            return "INVESTIMENTOS"
+
+    # 9. Comerciais (4.06)
+    if any(k in n for k in ["comissão", "comissao", "vendedor", "representante", "comercial"]):
         return "COMERCIAIS"
+
+    # 10. Administrativas (4.05 + outros não classificados)
     if any(k in n for k in ["administrativ", "escritório", "escritorio", "material",
-                              "papelaria", "telefone", "internet", "água", "agua",
-                              "energia elétrica", "energia eletrica", "luz ", "contador",
-                              "contabilidade", "software", "assinatura", "serviço",
-                              "servico", "manutenção", "manutencao", "limpeza",
-                              "segurança", "seguranca", "seguro", "plano"]):
+                              "papelaria", "telefone", "telefonia", "internet", "água", "agua",
+                              "contador", "contabilidade", "honorário", "honorario",
+                              "software", "assinatura", "serviço", "servico",
+                              "manutenção", "manutencao", "limpeza",
+                              "segurança", "seguranca", "seguro", "plano",
+                              "lanches", "refeição", "refeicao", "refeições", "refeicoes",
+                              "transporte", "táxi", "taxi", "uber",
+                              "patente", "pequeno valor", "mobiliário", "mobiliario",
+                              "luminária", "luminaria"]):
         return "ADMINISTRATIVAS"
-    # Despesas sem classificação clara → OUTRAS_DESPESAS
+
     return "OUTRAS_DESPESAS"
 
 
