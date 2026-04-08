@@ -560,6 +560,9 @@ function runSnapshotManual(clientId) {
         <button id="snap-cancel" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:14px">Cancelar</button>
         <button id="snap-ok" style="flex:1;padding:10px;background:var(--brand);border:none;border-radius:8px;color:#000;font-weight:600;cursor:pointer;font-size:14px">Atualizar</button>
       </div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);text-align:center">
+        <button id="snap-del" style="background:none;border:none;color:#e05252;font-size:12px;cursor:pointer;text-decoration:underline">Limpar snapshot do mês selecionado</button>
+      </div>
     </div>`;
   document.body.appendChild(modal);
 
@@ -569,6 +572,23 @@ function runSnapshotManual(clientId) {
   };
 
   document.getElementById('snap-cancel').onclick = () => modal.remove();
+  document.getElementById('snap-del').onclick = async () => {
+    const mes = document.getElementById('snap-mes').value;
+    if (!mes) { alert('Selecione um mês.'); return; }
+    if (!confirm(`Tem certeza que deseja EXCLUIR o snapshot de ${mes}?\nEsta ação não pode ser desfeita.`)) return;
+    modal.remove();
+    showLoading(`Excluindo snapshot de ${mes}...`);
+    try {
+      await apiFetch(`/dashboard/snapshot/${clientId}/${mes}`, 'DELETE');
+      alert(`🗑️ Snapshot de ${mes} removido com sucesso.`);
+      if (STATE.role === 'master') loadPainelMaster();
+      else loadPainelParceiro();
+    } catch(e) {
+      alert('Erro: ' + e.message);
+    } finally {
+      hideLoading();
+    }
+  };
   document.getElementById('snap-ok').onclick = async () => {
     let mes = document.getElementById('snap-mes').value;
     const ateHoje = document.getElementById('snap-ate-hoje').checked;
