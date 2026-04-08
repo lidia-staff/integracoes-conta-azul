@@ -7,7 +7,7 @@ from fastapi import APIRouter, Body, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.db.models import Company, AsaasCredential, AsaasExecutionLog
+from app.db.models import Company, AsaasCredential, AsaasExecutionLog, AsaasProcessedEvent
 from app.services.asaas_client import AsaasClient
 
 logger = logging.getLogger(__name__)
@@ -166,6 +166,22 @@ def ping_asaas(company_id: int):
         return {"ok": True, "account": info}
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Falha ao conectar no Asaas: {str(e)}")
+
+
+@router.delete("/companies/{company_id}/asaas/processed-events")
+def clear_processed_events(company_id: int, status: Optional[str] = None):
+    """Remove registros de idempotência para permitir reprocessamento."""
+    db: Session = SessionLocal()
+    try:
+        _get_company_or_404(db, company_id)
+        q = db.query(AsaasProcessedEvent).filter(AsaasProcessedEvent.company_id == company_id)
+        if status:
+            q = q.filter(AsaasProcessedEvent.status == status)
+        deleted = q.delete()
+        db.commit()
+        return {"ok": True, "deleted": deleted}
+    finally:
+        db.close()
 
 
 @router.get("/companies/{company_id}/asaas/webhooks")
