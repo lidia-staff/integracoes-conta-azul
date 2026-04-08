@@ -347,6 +347,24 @@ def delete_client(client_id: int, _: dict = Depends(require_master)):
         db.close()
 
 
+@router.delete("/snapshot/{client_id}/{mes}")
+def delete_snapshot(client_id: int, mes: str, _: dict = Depends(require_master_or_partner)):
+    """Remove snapshot de um mês específico. Formato: YYYY-MM."""
+    db = SessionLocal()
+    try:
+        deleted = (
+            db.query(DashSnapshot)
+            .filter(DashSnapshot.client_id == client_id, DashSnapshot.snapshot_month == mes)
+            .delete()
+        )
+        db.commit()
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Snapshot {mes} não encontrado")
+        return {"ok": True, "deleted_month": mes, "client_id": client_id}
+    finally:
+        db.close()
+
+
 # ── OAuth callback para Dashboard ────────────────────────────────────
 
 
