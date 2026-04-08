@@ -170,8 +170,11 @@ def _nome_to_dre_field(nome: str, tipo_tx: str) -> str | None:
     if any(k in n for k in ["investimento", "equipamento", "máquina", "maquina",
                               "imobilizado", "capex", "compra de ativo"]):
         return "INVESTIMENTOS"
-    if any(k in n for k in ["custo produto", "mercadoria", "estoque", "matéria-prima",
-                              "materia-prima", "insumo", "produto revendido"]):
+    if any(k in n for k in ["custo produto", "custo de serviço", "custo serviço",
+                              "custo dos serviços", "materiais aplicados", "materiais na prestação",
+                              "material aplicado", "insumo", "produto revendido",
+                              "mercadoria", "estoque", "matéria-prima", "materia-prima",
+                              "custo variável", "custo variavel"]):
         return "CUSTOS_TOTAIS"
     if any(k in n for k in ["comissão", "comissao", "vendedor", "representante"]):
         return "COMERCIAIS"
