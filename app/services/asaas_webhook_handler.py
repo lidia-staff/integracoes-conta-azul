@@ -206,6 +206,8 @@ def _sync_to_ca(
     billing_type = payment.get("billingType", "")
 
     company = db.query(Company).filter_by(id=company_id).first()
+    if not company.default_item_id:
+        raise RuntimeError("default_item_id não configurado para a empresa. Configure em Configurações > Mapeamento de Produtos.")
     id_conta = _resolve_financial_account(db, company, billing_type)
     ca_payment_type = _ASAAS_BILLING_TO_CA_TYPE.get(billing_type.upper(), "OUTRO")
 
@@ -220,7 +222,7 @@ def _sync_to_ca(
         "situacao": "APROVADO",
         "data_venda": payment_date,
         "observacoes": f"Asaas: {description[:150]}",
-        "itens": [{"descricao": description[:200], "quantidade": 1.0, "valor": value}],
+        "itens": [{"id": company.default_item_id, "descricao": description[:200], "quantidade": 1.0, "valor": value}],
         "condicao_pagamento": {
             "tipo_pagamento": ca_payment_type,
             "opcao_condicao_pagamento": "À vista",
