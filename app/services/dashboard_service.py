@@ -128,6 +128,64 @@ def _empty_dre() -> dict:
     return {f: 0.0 for f in DRE_FIELDS if f not in CALCULATED_FIELDS}
 
 
+def _nome_to_dre_field(nome: str, tipo_tx: str) -> str | None:
+    """
+    Fallback: mapeia nome da categoria para campo DRE por palavras-chave.
+    Usado quando entrada_dre_raw está vazio (CA API v2 não tem esse campo).
+    """
+    n = (nome or "").lower()
+
+    if tipo_tx == "Receita":
+        # Impostos sobre receita ficam em IMPOSTOS
+        if any(k in n for k in ["imposto", "tributo", "iss ", "das ", "simples", "cofins", "pis/", "irpj", "csll"]):
+            return "IMPOSTOS"
+        if any(k in n for k in ["juros recebido", "rendimento", "aplicação", "financeiro"]):
+            return "RECEITAS_FINANCEIRAS"
+        # Toda receita operacional → FATURAMENTO_BRUTO
+        return "FATURAMENTO_BRUTO"
+
+    # Despesas
+    if any(k in n for k in ["salário", "salario", "folha", "funcionário", "funcionario",
+                              "férias", "ferias", "13º", "fgts", "inss", "clt", "pessoal",
+                              "benefício", "beneficio", "vale", "pró-labore", "pro-labore",
+                              "pro labore"]):
+        return "DEPTO_PESSOAL"
+    if any(k in n for k in ["retirada", "distribuição de lucro", "distribuicao de lucro",
+                              "distribuição sócio", "socio", "sócio"]):
+        return "RETIRADA_SOCIO"
+    if any(k in n for k in ["aluguel", "imóvel", "imovel", "locação", "locacao",
+                              "condomínio", "condominio", "iptu", "arrendamento"]):
+        return "IMOVEL"
+    if any(k in n for k in ["marketing", "publicidade", "propaganda", "mídia", "midia",
+                              "anúncio", "anuncio", "google ads", "facebook", "instagram ads",
+                              "influencer", "panfleto", "impulsionamento"]):
+        return "MARKETING"
+    if any(k in n for k in ["imposto", "tributo", "iss", "das ", "simples nacional",
+                              "cofins", "pis", "irpj", "csll", "iof", "icms", "darf"]):
+        return "IMPOSTOS"
+    if any(k in n for k in ["juros", "tarifa bancária", "tarifa bancaria", "iof",
+                              "multa financeira", "encargo", "banco ", "cartão banco",
+                              "taxa bancária", "taxa bancaria", "anuidade"]):
+        return "DESPESAS_FINANCEIRAS"
+    if any(k in n for k in ["investimento", "equipamento", "máquina", "maquina",
+                              "imobilizado", "capex", "compra de ativo"]):
+        return "INVESTIMENTOS"
+    if any(k in n for k in ["custo produto", "mercadoria", "estoque", "matéria-prima",
+                              "materia-prima", "insumo", "produto revendido"]):
+        return "CUSTOS_TOTAIS"
+    if any(k in n for k in ["comissão", "comissao", "vendedor", "representante"]):
+        return "COMERCIAIS"
+    if any(k in n for k in ["administrativ", "escritório", "escritorio", "material",
+                              "papelaria", "telefone", "internet", "água", "agua",
+                              "energia elétrica", "energia eletrica", "luz ", "contador",
+                              "contabilidade", "software", "assinatura", "serviço",
+                              "servico", "manutenção", "manutencao", "limpeza",
+                              "segurança", "seguranca", "seguro", "plano"]):
+        return "ADMINISTRATIVAS"
+    # Despesas sem classificação clara → OUTRAS_DESPESAS
+    return "OUTRAS_DESPESAS"
+
+
 def aggregate_transactions(
     transactions: list[dict],
     category_map: dict[str, str],   # ca_category_id → entrada_dre
@@ -151,25 +209,24 @@ def aggregate_transactions(
             continue
 
         # Resolve categoria
-        cat_raw = tx.get("categoria") or {}
-        cat_id = str(
-            tx.get("categoria_id")
-            or (cat_raw.get("id") if isinstance(cat_raw, dict) else "")
-            or ""
-        )
+        cat_id = str(tx.get("categoria_id") or "")
         if cat_id in ignored_categories:
             continue
 
-        # Tenta entrada_dre embutida na transação (nova API) ou via category_map (legado)
-        entrada_dre_raw = (
-            tx.get("entrada_dre_raw")
-            or category_map.get(cat_id, "")
-        )
-        dre_field = ENTRADA_DRE_MAP.get(entrada_dre_raw.upper() if entrada_dre_raw else "")
-        if not dre_field:
-            continue  # categoria sem mapeamento DRE — ignora
+        # 1ª tentativa: entrada_dre_raw embutido (legado / CA v1)
+        entrada_dre_raw = tx.get("entrada_dre_raw") or category_map.get(cat_id, "")
+        dre_field = ENTRADA_DRE_MAP.get(entrada_dre_raw.upper()) if entrada_dre_raw else None
 
-        valor = float(tx.get("valor") or tx.get("valor_liquido") or 0)
+        # 2ª tentativa: mapeia por nome da categoria (CA API v2 não tem entrada_dre)
+        if not dre_field:
+            cat_name = tx.get("categoria_nome") or tx.get("descricao") or ""
+            tipo_tx = tx.get("tipo", "Despesa")
+            dre_field = _nome_to_dre_field(cat_name, tipo_tx)
+
+        if not dre_field:
+            continue
+
+        valor = float(tx.get("valor") or 0)
         cat_name = tx.get("categoria_nome") or tx.get("descricao") or cat_id
 
         totals[dre_field] = totals.get(dre_field, 0.0) + valor

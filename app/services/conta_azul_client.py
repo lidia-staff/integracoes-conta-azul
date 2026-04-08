@@ -413,13 +413,13 @@ class ContaAzulClient:
         if tipo is None or tipo == "Receita":
             endpoints_cfg.append((
                 "/v1/financeiro/eventos-financeiros/contas-a-receber/buscar",
-                "RECEBIDO",
+                "RECEBIDO",    # CA v2: aceita RECEBIDO para contas-a-receber
                 "Receita",
             ))
         if tipo is None or tipo == "Despesa":
             endpoints_cfg.append((
                 "/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar",
-                "QUITADO",   # CA v2: QUITADO = pago/liquidado (não PAGO)
+                "ACQUITTED",   # CA v2: status real = ACQUITTED (inglês) para contas-a-pagar
                 "Despesa",
             ))
 
@@ -457,35 +457,33 @@ class ContaAzulClient:
                     total = resp.get("itens_totais", resp.get("total", len(raw_items)))
 
                 for item in raw_items:
-                    # Normaliza para estrutura uniforme usada pelo snapshot
-                    # API v2 usa snake_case mas tenta camelCase como fallback
-                    cat_obj = (
-                        item.get("categoria_financeira")
-                        or item.get("categoriaFinanceira")
-                        or item.get("categoria")
-                        or {}
+                    # CA API v2 — estrutura real descoberta via debug-raw:
+                    # - categorias: array (não objeto único)
+                    # - valor: campo "pago" ou "total" (não "valor")
+                    # - status: "ACQUITTED" (inglês)
+                    # - sem campo entrada_dre — mapeamento por nome da categoria
+                    categorias = item.get("categorias") or []
+                    cat_obj = categorias[0] if categorias else {}
+
+                    # Valor efetivamente pago (caixa)
+                    valor = float(
+                        item.get("pago")
+                        or item.get("total")
+                        or item.get("valor")
+                        or 0
                     )
-                    conta_obj = (
-                        item.get("conta_financeira")
-                        or item.get("contaFinanceira")
-                        or {}
-                    )
-                    # entrada_dre: campo que mapeia a linha do DRE
-                    entrada_dre_raw = (
-                        cat_obj.get("entrada_dre")
-                        or cat_obj.get("entradaDre")
-                        or ""
-                    )
+
                     all_items.append({
                         "id": item.get("id"),
-                        "descricao": item.get("descricao") or item.get("nome") or "",
-                        "valor": float(item.get("valor") or item.get("valor_liquido") or 0),
+                        "descricao": item.get("descricao") or "",
+                        "valor": valor,
                         "tipo": tipo_tx,
-                        "conta_financeira_id": str(conta_obj.get("id") or conta_obj.get("uuid") or ""),
-                        "categoria_id": str(cat_obj.get("id") or cat_obj.get("uuid") or ""),
-                        "categoria_nome": cat_obj.get("nome") or cat_obj.get("descricao") or item.get("descricao") or "",
-                        "entrada_dre_raw": entrada_dre_raw,
-                        "data_pagamento": item.get("data_pagamento") or item.get("dataPagamento") or "",
+                        "conta_financeira_id": "",  # CA v2 não retorna neste endpoint
+                        "categoria_id": str(cat_obj.get("id") or ""),
+                        "categoria_nome": cat_obj.get("nome") or item.get("descricao") or "",
+                        # CA v2 não tem entrada_dre — dashboard_service usará nome da categoria
+                        "entrada_dre_raw": "",
+                        "data_pagamento": item.get("data_vencimento") or "",
                     })
 
                 print(f"[CA_CLIENT] {endpoint} pág {page}: +{len(raw_items)} | acumulado {len(all_items)}")
