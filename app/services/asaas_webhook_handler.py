@@ -217,7 +217,7 @@ def _sync_to_ca(
     sale_payload = {
         "id_cliente": ca_customer_id,
         "numero": next_number,
-        "situacao": "CONCLUIDO",
+        "situacao": "APROVADO",
         "data_venda": payment_date,
         "observacoes": f"Asaas: {description[:150]}",
         "itens": [{"descricao": description[:200], "quantidade": 1.0, "valor": value}],
