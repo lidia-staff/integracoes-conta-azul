@@ -146,6 +146,27 @@ _ASAAS_BILLING_TO_CA_TYPE = {
 }
 
 
+def _get_or_create_asaas_service(ca_client: ContaAzulClient) -> str:
+    """Busca ou cria o serviço 'Pagamento Asaas' no CA e retorna seu UUID."""
+    SERVICE_NAME = "Pagamento Asaas"
+    try:
+        resp = ca_client.list_services(busca=SERVICE_NAME)
+        itens = resp.get("itens", resp.get("content", [])) if isinstance(resp, dict) else resp
+        for s in itens:
+            if s.get("descricao", "").upper() == SERVICE_NAME.upper():
+                sid = s.get("id") or s.get("uuid")
+                if sid:
+                    return str(sid)
+    except Exception as e:
+        logger.warning(f"[ASAAS] Erro ao listar serviços CA: {e}")
+
+    resp = ca_client.create_service(SERVICE_NAME)
+    sid = resp.get("id") or resp.get("uuid")
+    if not sid:
+        raise RuntimeError(f"CA não retornou ID ao criar serviço '{SERVICE_NAME}': {resp}")
+    return str(sid)
+
+
 def _resolve_financial_account(db: Session, company: Company, billing_type: str) -> str | None:
     """Resolve o id_conta do CA a partir do billingType do Asaas."""
     ca_key = _ASAAS_BILLING_TO_CA_KEY.get((billing_type or "").upper())
@@ -206,10 +227,9 @@ def _sync_to_ca(
     billing_type = payment.get("billingType", "")
 
     company = db.query(Company).filter_by(id=company_id).first()
-    if not company.default_item_id:
-        raise RuntimeError("default_item_id não configurado para a empresa. Configure em Configurações > Mapeamento de Produtos.")
     id_conta = _resolve_financial_account(db, company, billing_type)
     ca_payment_type = _ASAAS_BILLING_TO_CA_TYPE.get(billing_type.upper(), "OUTRO")
+    service_id = _get_or_create_asaas_service(ca_client)
 
     try:
         next_number = ca_client.get_next_sale_number()
@@ -222,7 +242,7 @@ def _sync_to_ca(
         "situacao": "APROVADO",
         "data_venda": payment_date,
         "observacoes": f"Asaas: {description[:150]}",
-        "itens": [{"id": company.default_item_id, "descricao": description[:200], "quantidade": 1.0, "valor": value}],
+        "itens": [{"id": service_id, "descricao": description[:200], "quantidade": 1.0, "valor": value}],
         "condicao_pagamento": {
             "tipo_pagamento": ca_payment_type,
             "opcao_condicao_pagamento": "À vista",
