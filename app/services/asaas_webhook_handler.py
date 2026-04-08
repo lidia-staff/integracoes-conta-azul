@@ -136,6 +136,15 @@ _ASAAS_BILLING_TO_CA_KEY = {
     "DEPOSIT": "DINHEIRO",
 }
 
+_ASAAS_BILLING_TO_CA_TYPE = {
+    "BOLETO": "BOLETO_BANCARIO",
+    "CREDIT_CARD": "CARTAO_CREDITO",
+    "DEBIT_CARD": "CARTAO_DEBITO",
+    "PIX": "PIX_PAGAMENTO_INSTANTANEO",
+    "TRANSFER": "TRANSFERENCIA_BANCARIA",
+    "DEPOSIT": "DINHEIRO",
+}
+
 
 def _resolve_financial_account(db: Session, company: Company, billing_type: str) -> str | None:
     """Resolve o id_conta do CA a partir do billingType do Asaas."""
@@ -185,48 +194,48 @@ def _sync_to_ca(
         customer_name=customer_name,
     )
 
-    # ── Passo 2: Criar conta a receber ──────────────────────────────────────
+    # ── Passo 2: Criar venda no CA ───────────────────────────────────────────
     value = float(payment.get("value", 0))
-    due_date = payment.get("dueDate") or payment.get("paymentDate") or datetime.utcnow().strftime("%Y-%m-%d")
-    description = payment.get("description") or f"Pagamento Asaas {payment.get('id', '')}"
-
-    company = db.query(Company).filter_by(id=company_id).first()
-    billing_type = payment.get("billingType", "")
-    id_conta = _resolve_financial_account(db, company, billing_type)
-
-    receivable_payload = {
-        "id_pessoa": ca_customer_id,
-        "descricao": description[:200],
-        "valor": value,
-        "data_vencimento": due_date,
-        "competencia": due_date[:7],  # YYYY-MM
-    }
-    if id_conta:
-        receivable_payload["id_conta"] = id_conta
-
-    receivable_resp = ca_client.create_receivable(receivable_payload)
-    ca_receivable_id = (
-        receivable_resp.get("id")
-        or receivable_resp.get("id_conta_a_receber")
-        or receivable_resp.get("uuid")
-    )
-    if not ca_receivable_id:
-        raise RuntimeError(f"CA não retornou ID da conta a receber: {receivable_resp}")
-
-    # ── Passo 3: Baixar conta a receber ──────────────────────────────────────
     payment_date = (
         payment.get("paymentDate")
         or payment.get("confirmedDate")
         or datetime.utcnow().strftime("%Y-%m-%d")
     )
+    due_date = payment.get("dueDate") or payment_date
+    description = payment.get("description") or f"Pagamento Asaas {payment.get('id', '')}"
+    billing_type = payment.get("billingType", "")
 
-    ca_client.mark_receivable_paid(
-        receivable_id=ca_receivable_id,
-        value=value,
-        payment_date=payment_date,
-    )
+    company = db.query(Company).filter_by(id=company_id).first()
+    id_conta = _resolve_financial_account(db, company, billing_type)
+    ca_payment_type = _ASAAS_BILLING_TO_CA_TYPE.get(billing_type.upper(), "OUTRO")
 
-    return ca_customer_id, ca_receivable_id
+    try:
+        next_number = ca_client.get_next_sale_number()
+    except Exception:
+        next_number = int(datetime.utcnow().timestamp())
+
+    sale_payload = {
+        "id_cliente": ca_customer_id,
+        "numero": next_number,
+        "situacao": "CONCLUIDO",
+        "data_venda": payment_date,
+        "observacoes": f"Asaas: {description[:150]}",
+        "itens": [{"descricao": description[:200], "quantidade": 1.0, "valor": value}],
+        "condicao_pagamento": {
+            "tipo_pagamento": ca_payment_type,
+            "opcao_condicao_pagamento": "À vista",
+            "parcelas": [{"data_vencimento": due_date, "valor": value}],
+        },
+    }
+    if id_conta:
+        sale_payload["condicao_pagamento"]["id_conta_financeira"] = id_conta
+
+    sale_resp = ca_client.create_sale(sale_payload)
+    ca_sale_id = sale_resp.get("id") or sale_resp.get("uuid")
+    if not ca_sale_id:
+        raise RuntimeError(f"CA não retornou ID da venda: {sale_resp}")
+
+    return ca_customer_id, ca_sale_id
 
 
 def _save_log(
