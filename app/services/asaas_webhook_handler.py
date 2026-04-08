@@ -229,7 +229,7 @@ def _sync_to_ca(
     company = db.query(Company).filter_by(id=company_id).first()
     id_conta = _resolve_financial_account(db, company, billing_type)
     ca_payment_type = _ASAAS_BILLING_TO_CA_TYPE.get(billing_type.upper(), "OUTRO")
-    service_id = _get_or_create_asaas_service(ca_client)
+    service_id = company.default_item_id or _get_or_create_asaas_service(ca_client)
 
     try:
         next_number = ca_client.get_next_sale_number()
