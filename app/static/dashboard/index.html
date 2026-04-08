@@ -798,7 +798,8 @@ function renderDRE(dados, ind, label) {
     dados.forEach(d => { const v=parseFloat(d[campo])||0; total+=v; tr+=`<td>${formatBR(v)}</td>`; });
     if (temTotal) tr += `<td>${formatBR(total)}</td>`;
     tr += `<td class="pct">${pctVal!=null?pct(pctVal):'—'}</td></tr>`;
-    tr += `<tr class="row-sub-dynamic" id="subs_${uid}"><td colspan="${cols.length+(temTotal?1:0)+2}">Carregando...</td></tr>`;
+    // Linha marcadora oculta — as linhas de subcategorias são inseridas depois dela dinamicamente
+    tr += `<tr class="row-sub-marker" id="subs_${uid}" style="display:none"><td></td></tr>`;
     return tr;
   }
 
@@ -835,47 +836,94 @@ function renderDRE(dados, ind, label) {
 }
 
 // ── Subcategorias expansíveis ─────────────────────────────────────
-const _subcatCache = {};
 function toggleSubcats(uid, dreKey) {
-  const subsRow = document.getElementById('subs_'+uid);
-  const btnEl = document.getElementById('ebtn_'+uid);
-  const isOpen = subsRow.style.display === 'table-row';
+  const markerRow = document.getElementById('subs_'+uid);
+  const btnEl    = document.getElementById('ebtn_'+uid);
+  const isOpen   = btnEl.classList.contains('open');
 
+  // ── Fechar ──────────────────────────────────────────────────────
   if (isOpen) {
-    subsRow.style.display = 'none';
     btnEl.classList.remove('open');
+    // Remove linhas dinâmicas já inseridas
+    document.querySelectorAll('.sub-rows-'+uid).forEach(r => r.remove());
     return;
   }
 
-  subsRow.style.display = 'table-row';
+  // ── Abrir ───────────────────────────────────────────────────────
   btnEl.classList.add('open');
 
-  const dados = getDadosFiltrados();
-  const temTotal = dados.length > 1;
-  const nCols = dados.length + (temTotal ? 1 : 0) + 2;
+  // Remove eventuais linhas residuais (ex: clique rápido duplo)
+  document.querySelectorAll('.sub-rows-'+uid).forEach(r => r.remove());
 
-  // Agrega subcategorias por nome entre os meses selecionados
-  const subMap = {};
-  dados.forEach(d => {
-    const subcats = d.subcats || {};
-    const lista = subcats[dreKey] || [];
+  const dados   = getDadosFiltrados();
+  const temTotal = dados.length > 1;
+  const nCols   = dados.length + (temTotal ? 1 : 0) + 2; // nome + meses + [total] + pct
+
+  // Monta mapa: { categoria → [valor_mes0, valor_mes1, ...] }
+  const catMap = {};        // cat → array de valores por índice de mês
+  dados.forEach((d, mi) => {
+    const lista = (d.subcats || {})[dreKey] || [];
     lista.forEach(item => {
       const k = item.categoria || '—';
-      subMap[k] = (subMap[k] || 0) + (parseFloat(item.valor) || 0);
+      if (!catMap[k]) catMap[k] = new Array(dados.length).fill(0);
+      catMap[k][mi] = (catMap[k][mi] || 0) + (parseFloat(item.valor) || 0);
     });
   });
 
-  const entries = Object.entries(subMap).sort((a,b) => b[1]-a[1]);
+  const entries = Object.entries(catMap)
+    .map(([cat, vals]) => ({ cat, vals, total: vals.reduce((a,v)=>a+v,0) }))
+    .sort((a,b) => b.total - a.total);
+
   if (!entries.length) {
-    subsRow.innerHTML = `<td colspan="${nCols}" style="color:var(--gray);padding:8px 14px 8px 42px;font-size:12px">Nenhuma subcategoria</td>`;
+    // Nenhuma subcat — insere única linha informativa
+    const trEmpty = document.createElement('tr');
+    trEmpty.className = 'sub-rows-'+uid;
+    trEmpty.style.cssText = 'background:var(--bg)';
+    trEmpty.innerHTML = `<td colspan="${nCols}" style="color:var(--muted);padding:8px 14px 8px 42px;font-size:12px;font-style:italic">Nenhuma subcategoria</td>`;
+    markerRow.insertAdjacentElement('afterend', trEmpty);
     return;
   }
 
-  subsRow.innerHTML = entries.map(([cat, val]) =>
-    `<td style="padding:6px 14px 6px 42px;font-size:12px;color:var(--gray)">${cat}</td>`+
-    Array(nCols-2).fill('').map((_,i) => `<td></td>`).join('')+
-    `<td style="font-size:12px;color:var(--dark);font-weight:600;text-align:right;padding:6px 14px">${formatBR(val)}</td>`
-  ).join('</tr><tr class="row-sub-dynamic" style="display:table-row">');
+  // Insere de trás pra frente (afterend inverte a ordem), ou da frente pra trás
+  // Usamos referência móvel para inserir na ordem correta
+  let insertRef = markerRow;
+  entries.forEach(({ cat, vals, total }) => {
+    const tr = document.createElement('tr');
+    tr.className = 'sub-rows-'+uid;
+    tr.style.cssText = 'background:var(--bg)';
+
+    // Coluna: nome da categoria
+    const tdNome = document.createElement('td');
+    tdNome.style.cssText = 'padding:5px 14px 5px 40px;font-size:12px;color:var(--muted)';
+    tdNome.textContent = cat;
+    tr.appendChild(tdNome);
+
+    // Colunas de meses
+    vals.forEach(v => {
+      const td = document.createElement('td');
+      td.style.cssText = 'font-size:12px;color:var(--text);text-align:right;padding:5px 14px';
+      td.textContent = v !== 0 ? formatBR(v) : '—';
+      tr.appendChild(td);
+    });
+
+    // Coluna total (apenas quando > 1 mês)
+    if (temTotal) {
+      const tdTot = document.createElement('td');
+      tdTot.style.cssText = 'font-size:12px;color:var(--text);font-weight:600;text-align:right;padding:5px 14px';
+      tdTot.textContent = formatBR(total);
+      tr.appendChild(tdTot);
+    }
+
+    // Coluna % — vazia nas subcats
+    const tdPct = document.createElement('td');
+    tdPct.className = 'pct';
+    tdPct.style.cssText = 'font-size:11px;color:var(--muted)';
+    tdPct.textContent = '—';
+    tr.appendChild(tdPct);
+
+    insertRef.insertAdjacentElement('afterend', tr);
+    insertRef = tr;   // próxima linha entra depois desta
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════
