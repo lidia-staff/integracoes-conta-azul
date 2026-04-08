@@ -245,8 +245,14 @@ def run_schema_migrations():
             CONSTRAINT uq_dash_snapshot_client_month UNIQUE (client_id, snapshot_month)
         );""",
     ]
+    # Colunas adicionadas em versões posteriores (ALTER TABLE idempotente)
+    column_migrations = [
+        "ALTER TABLE dash_clients ADD COLUMN IF NOT EXISTS bg_color VARCHAR(20) DEFAULT '#0f0f0f'",
+    ]
     with engine.begin() as conn:
         for s in stmts:
+            conn.execute(text(s))
+        for s in column_migrations:
             conn.execute(text(s))
 
 

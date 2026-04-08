@@ -518,7 +518,7 @@ async function loadPainelMaster() {
           &nbsp;·&nbsp;
           <button class="link-btn" onclick="runSnapshotManual(${c.id})">Atualizar</button>
           &nbsp;·&nbsp;
-          <button class="link-btn" onclick="configClient(${c.id},'${c.name.replace(/'/g,"\\'")}','${c.primary_color||'#F26522'}')">⚙ Config</button>
+          <button class="link-btn" onclick="configClient(${c.id},'${c.name.replace(/'/g,"\\'")}','${c.primary_color||'#F26522'}','${c.bg_color||'#0f0f0f'}')">⚙ Config</button>
         </td>
       </tr>`).join('');
   } catch(e) {
@@ -621,7 +621,8 @@ function runSnapshotManual(clientId) {
 // ═══════════════════════════════════════════════════════════════════
 // CONFIG CLIENTE (cor, contas/categorias ignoradas)
 // ═══════════════════════════════════════════════════════════════════
-async function configClient(clientId, clientName, currentColor) {
+async function configClient(clientId, clientName, currentColor, currentBg) {
+  currentBg = currentBg || '#0f0f0f';
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:9999;overflow-y:auto;padding:20px';
 
@@ -631,13 +632,23 @@ async function configClient(clientId, clientName, currentColor) {
       <p style="margin:0 0 20px;color:var(--muted);font-size:13px">Configurações do cliente</p>
 
       <!-- Cor principal -->
-      <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Cor principal</label>
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px">
+      <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Cor de destaque (botões, gráficos)</label>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
         <input type="color" id="cfg-color" value="${currentColor}"
           style="width:48px;height:40px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;padding:2px">
         <input type="text" id="cfg-color-hex" value="${currentColor}" maxlength="7"
           style="flex:1;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:monospace">
         <div id="cfg-color-preview" style="width:40px;height:40px;border-radius:8px;background:${currentColor};border:1px solid var(--border)"></div>
+      </div>
+
+      <!-- Cor de fundo -->
+      <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Cor de fundo do dashboard</label>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px">
+        <input type="color" id="cfg-bg" value="${currentBg}"
+          style="width:48px;height:40px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;padding:2px">
+        <input type="text" id="cfg-bg-hex" value="${currentBg}" maxlength="7"
+          style="flex:1;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:monospace">
+        <div id="cfg-bg-preview" style="width:40px;height:40px;border-radius:8px;background:${currentBg};border:1px solid var(--border)"></div>
       </div>
 
       <!-- Abas contas / categorias -->
@@ -666,49 +677,63 @@ async function configClient(clientId, clientName, currentColor) {
     </div>`;
   document.body.appendChild(modal);
 
-  // Sincroniza color picker ↔ campo hex ↔ preview
-  const colorInput = document.getElementById('cfg-color');
-  const hexInput   = document.getElementById('cfg-color-hex');
-  const preview    = document.getElementById('cfg-color-preview');
-  colorInput.oninput = () => { hexInput.value = colorInput.value; preview.style.background = colorInput.value; };
-  hexInput.oninput  = () => {
-    if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) {
-      colorInput.value = hexInput.value; preview.style.background = hexInput.value;
-    }
-  };
+  // Sincroniza picker ↔ hex ↔ preview
+  function syncPicker(pickerId, hexId, previewId) {
+    const p = document.getElementById(pickerId);
+    const h = document.getElementById(hexId);
+    const v = document.getElementById(previewId);
+    p.oninput = () => { h.value = p.value; v.style.background = p.value; };
+    h.oninput = () => { if (/^#[0-9a-fA-F]{6}$/.test(h.value)) { p.value = h.value; v.style.background = h.value; } };
+  }
+  syncPicker('cfg-color', 'cfg-color-hex', 'cfg-color-preview');
+  syncPicker('cfg-bg',    'cfg-bg-hex',    'cfg-bg-preview');
 
-  // Carrega contas e categorias em paralelo
+  // Carrega contas, categorias e estado atual em paralelo
   let contasData = [], catsData = [], ignoredContas = [], ignoredCats = [];
   try {
-    const [rc, rk] = await Promise.all([
+    const [rc, rk, clients] = await Promise.all([
       apiFetch(`/dashboard/ca/contas/${clientId}`),
       apiFetch(`/dashboard/ca/categorias/${clientId}`),
+      apiFetch('/dashboard/clients'),
     ]);
     contasData = rc.contas || [];
     catsData   = rk.categorias || [];
-
-    // Busca estado atual do cliente
-    const clients = await apiFetch('/dashboard/clients');
-    const cl = clients.find(c => c.id === clientId) || {};
+    const cl   = clients.find(c => c.id === clientId) || {};
     ignoredContas = cl.ignored_accounts || [];
     ignoredCats   = cl.ignored_categories || [];
   } catch(e) { /* segue em branco */ }
 
-  function renderList(wrap, items, ignored, idField, nameField) {
+  // Extrai nome independente do campo retornado pela API CA v2
+  function itemLabel(it) {
+    return it.nome || it.descricao || it.name || it.titulo
+        || it.label || it.categoria || it.description || String(it.id || '—');
+  }
+  function itemTipo(it) {
+    const t = (it.tipo || it.type || '').toString().toUpperCase();
+    if (t.includes('RECEI')) return ' · Receita';
+    if (t.includes('DESPE') || t.includes('ACQUI')) return ' · Despesa';
+    return t ? ` · ${t}` : '';
+  }
+
+  function renderList(wrap, items, ignored) {
     if (!items.length) { wrap.innerHTML = '<p style="color:var(--muted);font-size:13px">Nenhum item encontrado.</p>'; return; }
     wrap.innerHTML = items.map(it => {
-      const id  = String(it[idField] || it.id || '');
-      const lbl = it[nameField] || it.nome || it.name || id;
+      const id  = String(it.id || '');
+      const lbl = itemLabel(it);
+      const sub = itemTipo(it);
       const chk = ignored.includes(id) ? 'checked' : '';
-      return `<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;color:var(--text)">
-        <input type="checkbox" value="${id}" ${chk} style="width:15px;height:15px;accent-color:var(--brand)">
-        ${lbl}
+      return `<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer">
+        <input type="checkbox" value="${id}" ${chk} style="flex-shrink:0;width:15px;height:15px;accent-color:var(--brand)">
+        <span>
+          <span style="font-size:13px;color:var(--text)">${lbl}</span>
+          <span style="font-size:11px;color:var(--muted)">${sub}</span>
+        </span>
       </label>`;
     }).join('');
   }
 
-  renderList(document.getElementById('cfg-contas-wrap'), contasData, ignoredContas, 'id', 'nome');
-  renderList(document.getElementById('cfg-cats-wrap'),   catsData,   ignoredCats,   'id', 'nome');
+  renderList(document.getElementById('cfg-contas-wrap'), contasData, ignoredContas);
+  renderList(document.getElementById('cfg-cats-wrap'),   catsData,   ignoredCats);
 
   // Tab switcher
   window.cfgTab = (tab) => {
@@ -723,16 +748,18 @@ async function configClient(clientId, clientName, currentColor) {
   document.getElementById('cfg-cancel').onclick = () => modal.remove();
   document.getElementById('cfg-save').onclick = async () => {
     const color = document.getElementById('cfg-color').value;
+    const bgCol = document.getElementById('cfg-bg').value;
     const ignoredAccountsNew = [...document.querySelectorAll('#cfg-contas-wrap input:checked')].map(i => i.value);
     const ignoredCatsNew     = [...document.querySelectorAll('#cfg-cats-wrap input:checked')].map(i => i.value);
     try {
       await apiFetch(`/dashboard/clients/${clientId}`, 'PUT', {
-        primary_color:       color,
-        ignored_accounts:    ignoredAccountsNew,
-        ignored_categories:  ignoredCatsNew,
+        primary_color:      color,
+        bg_color:           bgCol,
+        ignored_accounts:   ignoredAccountsNew,
+        ignored_categories: ignoredCatsNew,
       });
       modal.remove();
-      alert('✅ Configurações salvas! Re-rode os snapshots para refletir as alterações.');
+      alert('✅ Configurações salvas! Re-rode os snapshots para refletir as alterações de mapeamento.');
       if (STATE.role === 'master') loadPainelMaster();
     } catch(e) {
       alert('Erro ao salvar: ' + e.message);
@@ -761,6 +788,7 @@ async function loadDashboard(clientId) {
     document.getElementById('sidebar-client-name').textContent = client.name;
     document.getElementById('sidebar-client-box').style.display = '';
     document.documentElement.style.setProperty('--client-color', client.primary_color || '#F26522');
+    document.documentElement.style.setProperty('--bg', client.bg_color || '#0f0f0f');
 
     // Topbar
     document.getElementById('topbar').style.display = '';

@@ -115,6 +115,7 @@ class UpdateClientRequest(BaseModel):
     segment: str | None = None
     logo_url: str | None = None
     primary_color: str | None = None
+    bg_color: str | None = None
     ignored_accounts: list[str] | None = None
     ignored_categories: list[str] | None = None
     benchmarks: dict | None = None
@@ -251,6 +252,7 @@ def list_clients(user: dict = Depends(get_current_user)):
                 "segment": c.segment,
                 "logo_url": c.logo_url,
                 "primary_color": c.primary_color,
+                "bg_color": c.bg_color or "#0f0f0f",
                 "active": c.active,
                 "last_snapshot": last_snap.snapshot_month if last_snap else None,
                 "last_updated": last_snap.updated_at.isoformat() if last_snap else None,
@@ -317,6 +319,8 @@ def update_client(
             client.logo_url = req.logo_url
         if req.primary_color is not None:
             client.primary_color = req.primary_color
+        if req.bg_color is not None:
+            client.bg_color = req.bg_color
         if req.ignored_accounts is not None:
             client.ignored_accounts = json.dumps(req.ignored_accounts)
         if req.ignored_categories is not None:
@@ -588,6 +592,7 @@ def get_dre(
                 "name": client.name if client else "",
                 "logo_url": client.logo_url if client else None,
                 "primary_color": client.primary_color if client else "#F26522",
+                "bg_color": (client.bg_color if client else None) or "#0f0f0f",
                 "segment": client.segment if client else "servico",
                 "benchmarks": json.loads(client.benchmarks or "{}") if client else {},
             },
