@@ -584,25 +584,53 @@ def get_dre(
 @router.post("/snapshot/run/{client_id}")
 def run_snapshot_manual(
     client_id: int,
-    target_month: str | None = None,
-    n_months: int = 1,
+    mes: str | None = None,      # "YYYY-MM" — mês específico (novo parâmetro principal)
+    ate_hoje: bool = False,       # True = do mês informado até o mês atual
+    target_month: str | None = None,  # legado
+    n_months: int = 1,            # legado
     user: dict = Depends(require_master_or_partner),
 ):
     """
     Executa snapshot manual.
-    - target_month: "YYYY-MM" — se omitido usa o mês atual
-    - n_months: quantos meses para trás executar (máx. 24)
+
+    Modo novo (preferencial):
+      ?mes=2025-03            → atualiza APENAS março (não toca outros meses)
+      ?mes=2025-03&ate_hoje=true → atualiza de março até o mês atual
+
+    Modo legado:
+      ?n_months=12            → últimos 12 meses a partir de hoje
     """
     _check_client_access(client_id, user)
+    from datetime import date
+    today = date.today()
 
+    # Modo novo: mês específico
+    if mes:
+        if ate_hoje:
+            # Gera lista de meses do mês informado até o atual
+            y0, m0 = int(mes[:4]), int(mes[5:7])
+            months_to_run = []
+            y, m = y0, m0
+            while (y, m) <= (today.year, today.month):
+                months_to_run.append(f"{y:04d}-{m:02d}")
+                m += 1
+                if m > 12:
+                    m = 1
+                    y += 1
+            results = [run_snapshot(client_id, t) for t in months_to_run]
+            return {"results": results}
+        else:
+            # Apenas o mês informado
+            result = run_snapshot(client_id, mes)
+            if not result.get("ok"):
+                raise HTTPException(status_code=500, detail=result.get("error", "Erro no snapshot"))
+            return result
+
+    # Modo legado
     if not target_month:
-        from datetime import date
-        today = date.today()
         target_month = f"{today.year:04d}-{today.month:02d}"
-
     if n_months > 1:
-        n_months = min(n_months, 24)
-        results = run_snapshot_last_n_months(client_id, n_months)
+        results = run_snapshot_last_n_months(client_id, min(n_months, 24))
         return {"results": results}
     else:
         result = run_snapshot(client_id, target_month)

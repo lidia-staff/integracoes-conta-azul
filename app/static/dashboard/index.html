@@ -527,45 +527,65 @@ async function loadPainelMaster() {
 }
 
 function runSnapshotManual(clientId) {
-  // Mês anterior como padrão
   const hoje = new Date();
+  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
   const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
   const defaultMes = `${mesAnterior.getFullYear()}-${String(mesAnterior.getMonth()+1).padStart(2,'0')}`;
 
-  // Modal de seleção de período
   const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:9999';
   modal.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;min-width:320px;max-width:400px">
-      <h3 style="margin:0 0 6px;color:var(--text)">Atualizar Dados</h3>
-      <p style="margin:0 0 20px;color:var(--muted);font-size:13px">Selecione o mês de referência a atualizar.<br>Normalmente: mês anterior ao atual.</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;min-width:340px;max-width:420px">
+      <h3 style="margin:0 0 4px;color:var(--text)">Atualizar Dados</h3>
+      <p style="margin:0 0 18px;color:var(--muted);font-size:13px">
+        Cada mês é salvo independentemente — atualizar março não afeta outros meses.
+        Ajustes feitos no CA serão refletidos ao rodar novamente o mesmo mês.
+      </p>
+
       <label style="display:block;margin-bottom:6px;font-size:13px;color:var(--muted)">Mês de referência</label>
-      <input type="month" id="snap-mes" value="${defaultMes}"
-        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px;box-sizing:border-box">
-      <div style="display:flex;gap:10px;margin-top:20px">
+      <input type="month" id="snap-mes" value="${defaultMes}" max="${defaultMes}"
+        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px;box-sizing:border-box;margin-bottom:14px">
+
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--muted);margin-bottom:6px">
+        <input type="checkbox" id="snap-ate-hoje" style="width:16px;height:16px;accent-color:var(--brand)">
+        Atualizar do mês selecionado até o mês anterior ao atual
+        <br><small style="color:var(--muted);font-size:11px">(útil quando há ajustes retroativos)</small>
+      </label>
+
+      <div id="snap-aviso" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);border-radius:6px;font-size:12px;color:#f5a623">
+        ⚠️ O mês atual (${mesAtual}) não será incluído — os dados ainda estão incompletos.
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:18px">
         <button id="snap-cancel" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:14px">Cancelar</button>
         <button id="snap-ok" style="flex:1;padding:10px;background:var(--brand);border:none;border-radius:8px;color:#000;font-weight:600;cursor:pointer;font-size:14px">Atualizar</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
 
+  // Aviso ao selecionar mês atual
+  document.getElementById('snap-mes').oninput = function() {
+    document.getElementById('snap-aviso').style.display = this.value === mesAtual ? 'block' : 'none';
+  };
+
   document.getElementById('snap-cancel').onclick = () => modal.remove();
   document.getElementById('snap-ok').onclick = async () => {
-    const mes = document.getElementById('snap-mes').value; // "YYYY-MM"
+    let mes = document.getElementById('snap-mes').value;
+    const ateHoje = document.getElementById('snap-ate-hoje').checked;
     if (!mes) { alert('Selecione um mês.'); return; }
+    // Bloqueia mês atual (dados incompletos)
+    if (mes === mesAtual) {
+      if (!confirm(`Atenção: ${mes} ainda está em andamento. Os dados estarão incompletos. Continuar mesmo assim?`)) return;
+    }
     modal.remove();
-    showLoading(`Atualizando ${mes}...`);
+    showLoading(ateHoje ? `Atualizando de ${mes} até hoje...` : `Atualizando ${mes}...`);
     try {
-      // Converte mês selecionado em n_months relativo ao mês atual
-      const [y, m] = mes.split('-').map(Number);
-      const hoje2 = new Date();
-      const diffMeses = (hoje2.getFullYear() - y) * 12 + (hoje2.getMonth() + 1 - m);
-      const nMonths = Math.max(1, diffMeses + 1); // inclui o mês selecionado
-      const r = await apiFetch(`/dashboard/snapshot/run/${clientId}?n_months=${nMonths}`, 'POST');
+      const params = ateHoje ? `mes=${mes}&ate_hoje=true` : `mes=${mes}`;
+      const r = await apiFetch(`/dashboard/snapshot/run/${clientId}?${params}`, 'POST');
       const label = Array.isArray(r.results)
-        ? r.results.map(x => x.mes_label || x.snapshot_month).join(', ')
+        ? `${r.results.length} meses atualizados (${r.results.map(x => x.mes_label || x.snapshot_month).join(', ')})`
         : (r.mes_label || r.snapshot_month);
-      alert(`Snapshot concluído: ${label}`);
+      alert(`✅ Snapshot concluído:\n${label}`);
       if (STATE.role === 'master') loadPainelMaster();
       else loadPainelParceiro();
     } catch(e) {
