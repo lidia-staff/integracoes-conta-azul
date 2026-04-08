@@ -59,7 +59,7 @@ def handle_payment_webhook(company_id: int, payload: dict) -> dict:
             return {"ok": True, "result": "error"}
 
         asaas_client = AsaasClient(api_key=cred.api_key, environment=cred.environment)
-        ca_client = ContaAzulClient(company_id=company_id, db=db)
+        ca_client = ContaAzulClient(company_id=company_id)
 
     except Exception as e:
         logger.exception(f"[ASAAS_WEBHOOK] company={company_id} erro ao inicializar clientes")
