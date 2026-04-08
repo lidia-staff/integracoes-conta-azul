@@ -517,6 +517,8 @@ async function loadPainelMaster() {
           <button class="link-btn" onclick="abrirCliente(${c.id})">Ver Dashboard</button>
           &nbsp;·&nbsp;
           <button class="link-btn" onclick="runSnapshotManual(${c.id})">Atualizar</button>
+          &nbsp;·&nbsp;
+          <button class="link-btn" onclick="configClient(${c.id},'${c.name.replace(/'/g,"\\'")}','${c.primary_color||'#F26522'}')">⚙ Config</button>
         </td>
       </tr>`).join('');
   } catch(e) {
@@ -543,7 +545,7 @@ function runSnapshotManual(clientId) {
       </p>
 
       <label style="display:block;margin-bottom:6px;font-size:13px;color:var(--muted)">Mês de referência</label>
-      <input type="month" id="snap-mes" value="${defaultMes}" max="${defaultMes}"
+      <input type="month" id="snap-mes" value="${defaultMes}" max="${mesAtual}"
         style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px;box-sizing:border-box;margin-bottom:14px">
 
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--muted);margin-bottom:6px">
@@ -612,6 +614,128 @@ function runSnapshotManual(clientId) {
       alert('Erro: ' + e.message);
     } finally {
       hideLoading();
+    }
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CONFIG CLIENTE (cor, contas/categorias ignoradas)
+// ═══════════════════════════════════════════════════════════════════
+async function configClient(clientId, clientName, currentColor) {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:9999;overflow-y:auto;padding:20px';
+
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;width:100%;max-width:520px">
+      <h3 style="margin:0 0 4px;color:var(--text)">${clientName}</h3>
+      <p style="margin:0 0 20px;color:var(--muted);font-size:13px">Configurações do cliente</p>
+
+      <!-- Cor principal -->
+      <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Cor principal</label>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px">
+        <input type="color" id="cfg-color" value="${currentColor}"
+          style="width:48px;height:40px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;padding:2px">
+        <input type="text" id="cfg-color-hex" value="${currentColor}" maxlength="7"
+          style="flex:1;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:monospace">
+        <div id="cfg-color-preview" style="width:40px;height:40px;border-radius:8px;background:${currentColor};border:1px solid var(--border)"></div>
+      </div>
+
+      <!-- Abas contas / categorias -->
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px">
+        <button id="tab-contas" onclick="cfgTab('contas')"
+          style="padding:8px 16px;background:none;border:none;border-bottom:2px solid var(--brand);color:var(--brand);cursor:pointer;font-size:13px;font-weight:600">Contas bancárias</button>
+        <button id="tab-cats" onclick="cfgTab('cats')"
+          style="padding:8px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-size:13px">Categorias</button>
+      </div>
+
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px">
+        Marque os itens que devem ser <strong style="color:var(--text)">ignorados</strong> no DRE (ex: contas de investimento, transferências internas).
+      </p>
+
+      <div id="cfg-contas-wrap" style="max-height:220px;overflow-y:auto;display:block">
+        <p style="color:var(--muted);font-size:13px">Carregando contas…</p>
+      </div>
+      <div id="cfg-cats-wrap" style="max-height:220px;overflow-y:auto;display:none">
+        <p style="color:var(--muted);font-size:13px">Carregando categorias…</p>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:22px">
+        <button id="cfg-cancel" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:14px">Cancelar</button>
+        <button id="cfg-save" style="flex:1;padding:10px;background:var(--brand);border:none;border-radius:8px;color:#000;font-weight:600;cursor:pointer;font-size:14px">Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  // Sincroniza color picker ↔ campo hex ↔ preview
+  const colorInput = document.getElementById('cfg-color');
+  const hexInput   = document.getElementById('cfg-color-hex');
+  const preview    = document.getElementById('cfg-color-preview');
+  colorInput.oninput = () => { hexInput.value = colorInput.value; preview.style.background = colorInput.value; };
+  hexInput.oninput  = () => {
+    if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) {
+      colorInput.value = hexInput.value; preview.style.background = hexInput.value;
+    }
+  };
+
+  // Carrega contas e categorias em paralelo
+  let contasData = [], catsData = [], ignoredContas = [], ignoredCats = [];
+  try {
+    const [rc, rk] = await Promise.all([
+      apiFetch(`/dashboard/ca/contas/${clientId}`),
+      apiFetch(`/dashboard/ca/categorias/${clientId}`),
+    ]);
+    contasData = rc.contas || [];
+    catsData   = rk.categorias || [];
+
+    // Busca estado atual do cliente
+    const clients = await apiFetch('/dashboard/clients');
+    const cl = clients.find(c => c.id === clientId) || {};
+    ignoredContas = cl.ignored_accounts || [];
+    ignoredCats   = cl.ignored_categories || [];
+  } catch(e) { /* segue em branco */ }
+
+  function renderList(wrap, items, ignored, idField, nameField) {
+    if (!items.length) { wrap.innerHTML = '<p style="color:var(--muted);font-size:13px">Nenhum item encontrado.</p>'; return; }
+    wrap.innerHTML = items.map(it => {
+      const id  = String(it[idField] || it.id || '');
+      const lbl = it[nameField] || it.nome || it.name || id;
+      const chk = ignored.includes(id) ? 'checked' : '';
+      return `<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;color:var(--text)">
+        <input type="checkbox" value="${id}" ${chk} style="width:15px;height:15px;accent-color:var(--brand)">
+        ${lbl}
+      </label>`;
+    }).join('');
+  }
+
+  renderList(document.getElementById('cfg-contas-wrap'), contasData, ignoredContas, 'id', 'nome');
+  renderList(document.getElementById('cfg-cats-wrap'),   catsData,   ignoredCats,   'id', 'nome');
+
+  // Tab switcher
+  window.cfgTab = (tab) => {
+    document.getElementById('cfg-contas-wrap').style.display = tab === 'contas' ? 'block' : 'none';
+    document.getElementById('cfg-cats-wrap').style.display   = tab === 'cats'   ? 'block' : 'none';
+    document.getElementById('tab-contas').style.borderBottomColor = tab === 'contas' ? 'var(--brand)' : 'transparent';
+    document.getElementById('tab-contas').style.color = tab === 'contas' ? 'var(--brand)' : 'var(--muted)';
+    document.getElementById('tab-cats').style.borderBottomColor = tab === 'cats' ? 'var(--brand)' : 'transparent';
+    document.getElementById('tab-cats').style.color = tab === 'cats' ? 'var(--brand)' : 'var(--muted)';
+  };
+
+  document.getElementById('cfg-cancel').onclick = () => modal.remove();
+  document.getElementById('cfg-save').onclick = async () => {
+    const color = document.getElementById('cfg-color').value;
+    const ignoredAccountsNew = [...document.querySelectorAll('#cfg-contas-wrap input:checked')].map(i => i.value);
+    const ignoredCatsNew     = [...document.querySelectorAll('#cfg-cats-wrap input:checked')].map(i => i.value);
+    try {
+      await apiFetch(`/dashboard/clients/${clientId}`, 'PUT', {
+        primary_color:       color,
+        ignored_accounts:    ignoredAccountsNew,
+        ignored_categories:  ignoredCatsNew,
+      });
+      modal.remove();
+      alert('✅ Configurações salvas! Re-rode os snapshots para refletir as alterações.');
+      if (STATE.role === 'master') loadPainelMaster();
+    } catch(e) {
+      alert('Erro ao salvar: ' + e.message);
     }
   };
 }

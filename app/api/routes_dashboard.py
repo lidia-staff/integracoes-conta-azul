@@ -254,6 +254,8 @@ def list_clients(user: dict = Depends(get_current_user)):
                 "active": c.active,
                 "last_snapshot": last_snap.snapshot_month if last_snap else None,
                 "last_updated": last_snap.updated_at.isoformat() if last_snap else None,
+                "ignored_accounts":   json.loads(c.ignored_accounts or "[]"),
+                "ignored_categories": json.loads(c.ignored_categories or "[]"),
             })
         return result
     finally:
