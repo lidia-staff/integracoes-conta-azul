@@ -267,13 +267,15 @@ def calculate_kpis(dre: dict, benchmarks: dict) -> dict:
     ll = dre.get("LUCRO_LIQUIDO", 0)
     lb = dre.get("LUCRO_BRUTO", 0)
     lop = dre.get("LUCRO_OPERACIONAL_EBITDA", 0)
-    custos = dre.get("CUSTOS_TOTAIS", 0) or 1
+    custos = dre.get("CUSTOS_TOTAIS", 0)
+    # Markup só faz sentido quando há custos registrados; caso contrário exibe 0
+    markup = round((fat / custos - 1) * 100, 1) if custos > 0 else 0.0
 
     return {
         "pct_ll":    round(ll / fat * 100, 1),
         "pct_lb":    round(lb / fat * 100, 1),
         "pct_ebitda": round(lop / fat * 100, 1),
-        "markup":    round((fat / custos - 1) * 100, 1),
+        "markup":    markup,
         "pct_imp":   round(dre.get("IMPOSTOS", 0) / fat * 100, 1),
         "pct_cus":   round(dre.get("CUSTOS_TOTAIS", 0) / fat * 100, 1),
         "pct_pes":   round(dre.get("DEPTO_PESSOAL", 0) / fat * 100, 1),
