@@ -31,6 +31,7 @@ class DashClient(Base):
     segment = Column(String(50), nullable=True, default="servico")
     logo_url = Column(Text, nullable=True)
     primary_color = Column(String(20), nullable=True, default="#F26522")
+    bg_color = Column(String(20), nullable=True, default="#0f0f0f")
 
     # Credenciais Conta Azul — independentes do módulo de vendas
     ca_access_token = Column(Text, nullable=True)
