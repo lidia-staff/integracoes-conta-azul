@@ -416,12 +416,69 @@ def list_ca_accounts(client_id: int, user: dict = Depends(require_master_or_part
 
 @router.get("/ca/categorias/{client_id}")
 def list_ca_categories(client_id: int, user: dict = Depends(require_master_or_partner)):
-    """Lista categorias financeiras do CA com entrada_dre — usado no onboarding etapa 3."""
+    """
+    Lista categorias individuais do CA (leaf-level) agrupadas por categoria pai.
+    Retorna estrutura: {"grupos": [{id, nome, tipo, filhos: [{id, nome, tipo}]}]}
+    """
     _check_client_access(client_id, user)
     try:
         ca = DashboardCAClient(client_id)
-        cats = ca.list_categories_dre()
-        return {"categorias": cats}
+        # Tenta /v1/categorias para obter todas as categorias individuais
+        flat: list = []
+        try:
+            resp = ca._request("GET", "/v1/categorias", params={"pagina": 1, "tamanho_pagina": 500}, timeout=30)
+            if isinstance(resp, list):
+                flat = resp
+            elif isinstance(resp, dict):
+                flat = resp.get("itens", resp.get("items", resp.get("data", [])))
+        except Exception:
+            pass
+        # Fallback: usa list_categories_dre (DRE groups)
+        if not flat:
+            flat = ca.list_categories_dre()
+            return {"categorias": flat, "grupos": []}
+
+        # Monta árvore pai → filhos
+        pai_map: dict = {}   # id_pai → item_pai
+        filhos_map: dict = {}  # id_pai → [filhos]
+        roots: list = []
+
+        for item in flat:
+            iid = str(item.get("id") or "")
+            pai_id = str(item.get("categoria_pai_id") or item.get("pai_id") or item.get("parent_id") or "")
+            item["_id"] = iid
+            item["_pai_id"] = pai_id
+            pai_map[iid] = item
+            if not pai_id:
+                roots.append(item)
+            else:
+                filhos_map.setdefault(pai_id, []).append(item)
+
+        # Se não há hierarquia (todos são raiz), retorna lista flat
+        if not filhos_map:
+            return {"categorias": flat, "grupos": []}
+
+        grupos = []
+        for root in roots:
+            rid = root["_id"]
+            nome_pai = root.get("nome") or root.get("descricao") or root.get("name") or rid
+            tipo_pai = (root.get("tipo") or "").upper()
+            grupo = {
+                "id": rid,
+                "nome": nome_pai,
+                "tipo": tipo_pai,
+                "filhos": [
+                    {
+                        "id": str(f.get("id") or ""),
+                        "nome": f.get("nome") or f.get("descricao") or f.get("name") or str(f.get("id") or ""),
+                        "tipo": (f.get("tipo") or tipo_pai).upper(),
+                    }
+                    for f in filhos_map.get(rid, [])
+                ],
+            }
+            grupos.append(grupo)
+
+        return {"categorias": flat, "grupos": grupos}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

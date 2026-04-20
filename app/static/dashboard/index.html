@@ -689,51 +689,89 @@ async function configClient(clientId, clientName, currentColor, currentBg) {
   syncPicker('cfg-bg',    'cfg-bg-hex',    'cfg-bg-preview');
 
   // Carrega contas, categorias e estado atual em paralelo
-  let contasData = [], catsData = [], ignoredContas = [], ignoredCats = [];
+  let contasData = [], catsGrupos = [], catsFlatFallback = [], ignoredContas = [], ignoredCats = [];
   try {
     const [rc, rk, clients] = await Promise.all([
       apiFetch(`/dashboard/ca/contas/${clientId}`),
       apiFetch(`/dashboard/ca/categorias/${clientId}`),
       apiFetch('/dashboard/clients'),
     ]);
-    contasData = rc.contas || [];
-    catsData   = rk.categorias || [];
-    const cl   = clients.find(c => c.id === clientId) || {};
-    ignoredContas = cl.ignored_accounts || [];
-    ignoredCats   = cl.ignored_categories || [];
+    contasData       = rc.contas || [];
+    catsGrupos       = rk.grupos || [];
+    catsFlatFallback = rk.categorias || [];
+    const cl         = clients.find(c => c.id === clientId) || {};
+    ignoredContas    = cl.ignored_accounts || [];
+    ignoredCats      = cl.ignored_categories || [];
   } catch(e) { /* segue em branco */ }
 
-  // Extrai nome independente do campo retornado pela API CA v2
-  function itemLabel(it) {
-    return it.nome || it.descricao || it.name || it.titulo
-        || it.label || it.categoria || it.description || String(it.id || '—');
-  }
-  function itemTipo(it) {
-    const t = (it.tipo || it.type || '').toString().toUpperCase();
-    if (t.includes('RECEI')) return ' · Receita';
-    if (t.includes('DESPE') || t.includes('ACQUI')) return ' · Despesa';
-    return t ? ` · ${t}` : '';
+  function itemNome(it) {
+    return it.nome || it.descricao || it.name || it.titulo || it.label || String(it.id || '—');
   }
 
-  function renderList(wrap, items, ignored) {
-    if (!items.length) { wrap.innerHTML = '<p style="color:var(--muted);font-size:13px">Nenhum item encontrado.</p>'; return; }
+  // Render contas (lista flat simples)
+  function renderContas(wrap, items, ignored) {
+    if (!items.length) { wrap.innerHTML = '<p style="color:var(--muted);font-size:13px">Nenhuma conta encontrada.</p>'; return; }
     wrap.innerHTML = items.map(it => {
       const id  = String(it.id || '');
-      const lbl = itemLabel(it);
-      const sub = itemTipo(it);
+      const lbl = itemNome(it);
       const chk = ignored.includes(id) ? 'checked' : '';
       return `<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer">
         <input type="checkbox" value="${id}" ${chk} style="flex-shrink:0;width:15px;height:15px;accent-color:var(--brand)">
-        <span>
-          <span style="font-size:13px;color:var(--text)">${lbl}</span>
-          <span style="font-size:11px;color:var(--muted)">${sub}</span>
-        </span>
+        <span style="font-size:13px;color:var(--text)">${lbl}</span>
       </label>`;
     }).join('');
   }
 
-  renderList(document.getElementById('cfg-contas-wrap'), contasData, ignoredContas);
-  renderList(document.getElementById('cfg-cats-wrap'),   catsData,   ignoredCats);
+  // Render categorias com hierarquia pai → filhos
+  function renderCats(wrap, grupos, flatFallback, ignored) {
+    if (!grupos.length && !flatFallback.length) {
+      wrap.innerHTML = '<p style="color:var(--muted);font-size:13px">Nenhuma categoria encontrada.</p>'; return;
+    }
+    // Sem hierarquia: exibe lista flat
+    if (!grupos.length) {
+      wrap.innerHTML = flatFallback.map(it => {
+        const id = String(it.id || ''); const lbl = itemNome(it); const chk = ignored.includes(id) ? 'checked' : '';
+        return `<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer">
+          <input type="checkbox" value="${id}" ${chk} style="flex-shrink:0;width:15px;height:15px;accent-color:var(--brand)">
+          <span style="font-size:13px;color:var(--text)">${lbl}</span></label>`;
+      }).join('');
+      return;
+    }
+    // Com hierarquia: grupos expansíveis
+    wrap.innerHTML = grupos.map((g, gi) => {
+      const gHasChecked = g.filhos.some(f => ignored.includes(String(f.id)));
+      const filhosHtml = g.filhos.map(f => {
+        const id = String(f.id); const lbl = f.nome; const chk = ignored.includes(id) ? 'checked' : '';
+        return `<label style="display:flex;align-items:center;gap:10px;padding:6px 4px 6px 28px;border-bottom:1px solid var(--border);cursor:pointer">
+          <input type="checkbox" class="cat-child" value="${id}" ${chk} style="flex-shrink:0;width:14px;height:14px;accent-color:var(--brand)">
+          <span style="font-size:12px;color:var(--text)">${lbl}</span>
+        </label>`;
+      }).join('');
+      const tipo = g.tipo.includes('RECEI') ? '· Receita' : g.tipo.includes('DESPE') ? '· Despesa' : '';
+      return `
+        <div style="border-bottom:1px solid var(--border)">
+          <div onclick="cfgToggleGrupo(${gi})"
+            style="display:flex;align-items:center;gap:8px;padding:8px 4px;cursor:pointer;background:var(--surface2)">
+            <span id="cfg-g-arrow-${gi}" style="font-size:10px;color:var(--brand);transition:.2s">▶</span>
+            <span style="font-size:13px;font-weight:600;color:var(--text);flex:1">${g.nome}</span>
+            <span style="font-size:11px;color:var(--muted)">${tipo}</span>
+            ${gHasChecked ? '<span style="font-size:10px;color:var(--brand)">●</span>' : ''}
+          </div>
+          <div id="cfg-g-${gi}" style="display:none">${filhosHtml || '<p style="padding:8px 28px;font-size:12px;color:var(--muted)">Sem subcategorias</p>'}</div>
+        </div>`;
+    }).join('');
+  }
+
+  window.cfgToggleGrupo = (gi) => {
+    const wrap  = document.getElementById('cfg-g-'+gi);
+    const arrow = document.getElementById('cfg-g-arrow-'+gi);
+    const open  = wrap.style.display !== 'none';
+    wrap.style.display  = open ? 'none' : 'block';
+    arrow.style.transform = open ? '' : 'rotate(90deg)';
+  };
+
+  renderContas(document.getElementById('cfg-contas-wrap'), contasData, ignoredContas);
+  renderCats(document.getElementById('cfg-cats-wrap'), catsGrupos, catsFlatFallback, ignoredCats);
 
   // Tab switcher
   window.cfgTab = (tab) => {
