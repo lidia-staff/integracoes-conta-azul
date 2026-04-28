@@ -142,6 +142,13 @@ td.pct { color:var(--muted); font-size:11px; }
 .login-btn { width:100%; padding:14px; background:var(--brand); color:#0f0f0f; border:none; border-radius:10px; font-family:'Syne',sans-serif; font-size:15px; font-weight:700; cursor:pointer; transition:.2s; margin-top:8px; }
 .login-btn:hover { background:var(--brand-dark); }
 .login-error { background:rgba(231,76,60,.15); border:1px solid rgba(231,76,60,.3); color:#ff6b6b; font-size:13px; padding:10px 14px; border-radius:8px; margin-top:12px; display:none; }
+.login-success { background:rgba(0,229,160,.1); border:1px solid rgba(0,229,160,.3); color:#00e5a0; font-size:13px; padding:10px 14px; border-radius:8px; margin-top:12px; display:none; }
+.forgot-link { display:block; text-align:center; margin-top:16px; font-size:12px; color:var(--muted); cursor:pointer; transition:.2s; }
+.forgot-link:hover { color:var(--brand); }
+.reset-box { display:none; margin-top:24px; border-top:1px solid var(--border); padding-top:24px; }
+.reset-title { font-family:'Syne',sans-serif; font-size:14px; font-weight:700; color:var(--text); margin-bottom:16px; }
+.reset-back { background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; padding:0; margin-top:12px; display:block; width:100%; text-align:center; }
+.reset-back:hover { color:var(--brand); }
 
 /* ── PAINEL PARCEIRO ── */
 .painel-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; margin-top:16px; }
@@ -193,6 +200,22 @@ td.pct { color:var(--muted); font-size:11px; }
     <input class="login-input" type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
     <button class="login-btn" onclick="doLogin()">Entrar</button>
     <div class="login-error" id="login-error"></div>
+    <span class="forgot-link" onclick="toggleResetForm(true)">Esqueci minha senha</span>
+
+    <!-- RESET DE SENHA -->
+    <div class="reset-box" id="reset-box">
+      <div class="reset-title">Redefinir senha</div>
+      <label class="login-label">Código de segurança</label>
+      <input class="login-input" type="password" id="reset-secret" placeholder="Código fornecido pelo administrador">
+      <label class="login-label">Email</label>
+      <input class="login-input" type="email" id="reset-email" placeholder="seu@email.com">
+      <label class="login-label">Nova senha</label>
+      <input class="login-input" type="password" id="reset-newpass" placeholder="Mínimo 6 caracteres">
+      <button class="login-btn" onclick="doResetPassword()">Redefinir senha</button>
+      <div class="login-error" id="reset-error"></div>
+      <div class="login-success" id="reset-success"></div>
+      <button class="reset-back" onclick="toggleResetForm(false)">← Voltar para o login</button>
+    </div>
   </div>
 </div>
 
@@ -368,6 +391,49 @@ function showLoginError(msg) {
 document.getElementById('login-pass')?.addEventListener('keydown', e => {
   if (e.key === 'Enter') doLogin();
 });
+
+function toggleResetForm(show) {
+  document.getElementById('reset-box').style.display = show ? 'block' : 'none';
+  document.getElementById('reset-error').style.display = 'none';
+  document.getElementById('reset-success').style.display = 'none';
+  document.querySelector('.forgot-link').style.display = show ? 'none' : 'block';
+  if (!show) {
+    document.getElementById('reset-secret').value = '';
+    document.getElementById('reset-email').value = '';
+    document.getElementById('reset-newpass').value = '';
+  }
+}
+
+async function doResetPassword() {
+  const secret = document.getElementById('reset-secret').value.trim();
+  const email = document.getElementById('reset-email').value.trim();
+  const newPass = document.getElementById('reset-newpass').value;
+  const errEl = document.getElementById('reset-error');
+  const okEl = document.getElementById('reset-success');
+  errEl.style.display = 'none';
+  okEl.style.display = 'none';
+
+  if (!secret || !email || !newPass) {
+    errEl.textContent = 'Preencha todos os campos';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (newPass.length < 6) {
+    errEl.textContent = 'A nova senha deve ter ao menos 6 caracteres';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    const resp = await apiFetch('/dashboard/reset-password', 'POST', { secret, email, new_password: newPass }, false);
+    okEl.textContent = 'Senha redefinida com sucesso! Faça o login com a nova senha.';
+    okEl.style.display = 'block';
+    setTimeout(() => toggleResetForm(false), 3000);
+  } catch(e) {
+    errEl.textContent = e.message || 'Erro ao redefinir senha. Verifique o código de segurança.';
+    errEl.style.display = 'block';
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // INIT APP
