@@ -86,6 +86,44 @@ def bootstrap(req: BootstrapRequest):
         db.close()
 
 
+# ── Reset de senha — protegido por RESET_PASSWORD_SECRET ────────────
+
+class ResetPasswordRequest(BaseModel):
+    secret: str
+    email: str
+    new_password: str
+
+
+@router.post("/reset-password", summary="Redefine senha de um usuário (protegido por secret)")
+def reset_password(req: ResetPasswordRequest):
+    """
+    Redefine a senha de qualquer usuário do dashboard.
+    - Requer a variável RESET_PASSWORD_SECRET definida no Railway.
+    - Após usar, remova ou altere o RESET_PASSWORD_SECRET para desativar.
+    """
+    expected = os.getenv("RESET_PASSWORD_SECRET", "")
+    if not expected:
+        raise HTTPException(status_code=403, detail="Reset desativado (RESET_PASSWORD_SECRET não configurado)")
+
+    if req.secret != expected:
+        raise HTTPException(status_code=403, detail="Secret inválido")
+
+    if not req.new_password or len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Nova senha deve ter ao menos 6 caracteres")
+
+    db = SessionLocal()
+    try:
+        user = db.query(DashUser).filter(DashUser.email == req.email.strip().lower()).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"Usuário '{req.email}' não encontrado")
+
+        user.password_hash = hash_password(req.new_password)
+        db.commit()
+        return {"ok": True, "message": f"Senha redefinida com sucesso para {user.email}"}
+    finally:
+        db.close()
+
+
 # ── Schemas ─────────────────────────────────────────────────────────
 
 
