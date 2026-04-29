@@ -1252,7 +1252,22 @@ function renderIndicadores(dados, ind, label) {
       {label:'Lucro Líquido', val:ind.pctLl, bench:bench.LUCRO_LIQUIDO},
     ]},
     { title:'Comparativo com Metas', items:
-      Object.entries(bench).map(([k,v]) => ({label:k.replace(/_/g,' '), val:0, bench:v}))
+      Object.entries(bench).map(([k,v]) => {
+        const valMap = {
+          EBITDA: ind.pctEbitda,
+          MARGEM_CONTRIBUICAO: ind.pctLb,
+          MARKUP: ind.markup,
+          PCT_PESSOAL: ind.pctPes,
+          PCT_MARKETING: ind.pctMkt,
+          LUCRO_LIQUIDO: ind.pctLl,
+          LUCRO_BRUTO: ind.pctLb,
+          ADMINISTRATIVAS: ind.pctAdm,
+          COMERCIAIS: ind.pctCom2,
+          IMOVEL: ind.pctImo,
+          IMPOSTOS: ind.pctImp,
+        };
+        return {label: k.replace(/_/g,' '), val: valMap[k] ?? 0, bench: v};
+      })
     },
   ];
 
