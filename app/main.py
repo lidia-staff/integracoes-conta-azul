@@ -248,6 +248,7 @@ def run_schema_migrations():
     # Colunas adicionadas em versões posteriores (ALTER TABLE idempotente)
     column_migrations = [
         "ALTER TABLE dash_clients ADD COLUMN IF NOT EXISTS bg_color VARCHAR(20) DEFAULT '#0f0f0f'",
+        "ALTER TABLE dash_partners ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE",
     ]
     with engine.begin() as conn:
         for s in stmts:
