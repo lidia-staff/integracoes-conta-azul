@@ -158,6 +158,7 @@ class UpdateClientRequest(BaseModel):
     ignored_categories: list[str] | None = None
     benchmarks: dict | None = None
     active: bool | None = None
+    partner_id: int | None = None
 
 
 class CreateUserRequest(BaseModel):
@@ -235,6 +236,34 @@ def list_partners(_: dict = Depends(require_master)):
             }
             for p in partners
         ]
+    finally:
+        db.close()
+
+
+class UpdatePartnerRequest(BaseModel):
+    name: str | None = None
+    slug: str | None = None
+    logo_url: str | None = None
+    primary_color: str | None = None
+
+
+@router.put("/partners/{partner_id}")
+def update_partner(partner_id: int, req: UpdatePartnerRequest, _: dict = Depends(require_master)):
+    db = SessionLocal()
+    try:
+        partner = db.query(DashPartner).filter(DashPartner.id == partner_id).first()
+        if not partner:
+            raise HTTPException(status_code=404, detail="Parceiro não encontrado")
+        if req.name is not None:
+            partner.name = req.name
+        if req.slug is not None:
+            partner.slug = req.slug or None
+        if req.logo_url is not None:
+            partner.logo_url = req.logo_url or None
+        if req.primary_color is not None:
+            partner.primary_color = req.primary_color
+        db.commit()
+        return {"ok": True, "id": partner.id, "name": partner.name}
     finally:
         db.close()
 
@@ -367,6 +396,12 @@ def update_client(
             client.benchmarks = json.dumps(req.benchmarks)
         if req.active is not None:
             client.active = req.active
+        if req.partner_id is not None:
+            # Apenas master pode reatribuir parceiro
+            partner = db.query(DashPartner).filter(DashPartner.id == req.partner_id).first()
+            if not partner:
+                raise HTTPException(status_code=404, detail="Parceiro não encontrado")
+            client.partner_id = req.partner_id
 
         db.commit()
         return {"ok": True}
