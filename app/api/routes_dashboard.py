@@ -409,6 +409,159 @@ def delete_snapshot(client_id: int, mes: str, _: dict = Depends(require_master_o
         db.close()
 
 
+# ── Users ─────────────────────────────────────────────────────────────
+
+
+class CreateUserV2Request(BaseModel):
+    email: str
+    password: str
+    role: str = "client"          # master | partner | client
+    partner_id: int | None = None
+    client_id: int | None = None
+
+
+class PatchUserRequest(BaseModel):
+    new_password: str | None = None
+    active: bool | None = None
+
+
+@router.get("/users")
+def list_users(user: dict = Depends(get_current_user)):
+    """
+    Lista usuários.
+    - Master: todos os usuários
+    - Partner: usuários cujo client_id pertença a um cliente do parceiro
+    """
+    db = SessionLocal()
+    try:
+        q = db.query(DashUser)
+
+        if user["role"] == "partner":
+            # Ids dos clientes do parceiro
+            client_ids = [
+                c.id for c in db.query(DashClient)
+                .filter(DashClient.partner_id == user["partner_id"])
+                .all()
+            ]
+            q = q.filter(DashUser.client_id.in_(client_ids))
+        elif user["role"] == "client":
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        users = q.order_by(DashUser.created_at.desc()).all()
+        result = []
+        for u in users:
+            partner_name = None
+            client_name = None
+            if u.partner_id:
+                p = db.query(DashPartner).filter(DashPartner.id == u.partner_id).first()
+                partner_name = p.name if p else None
+            if u.client_id:
+                c = db.query(DashClient).filter(DashClient.id == u.client_id).first()
+                client_name = c.name if c else None
+            result.append({
+                "id": u.id,
+                "email": u.email,
+                "role": u.role,
+                "partner_id": u.partner_id,
+                "partner_name": partner_name,
+                "client_id": u.client_id,
+                "client_name": client_name,
+                "active": u.active,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+            })
+        return result
+    finally:
+        db.close()
+
+
+@router.post("/users")
+def create_user_v2(req: CreateUserV2Request, user: dict = Depends(get_current_user)):
+    """
+    Cria usuário.
+    - Master: pode criar qualquer role, vinculado a qualquer parceiro/cliente
+    - Partner: só pode criar role=client, vinculado a um cliente próprio
+    """
+    if user["role"] == "client":
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    if user["role"] == "partner":
+        if req.role != "client":
+            raise HTTPException(status_code=403, detail="Parceiro só pode criar usuários com role 'client'")
+        if not req.client_id:
+            raise HTTPException(status_code=400, detail="client_id obrigatório")
+        # Valida que o cliente pertence ao parceiro
+        db_check = SessionLocal()
+        try:
+            c = db_check.query(DashClient).filter(DashClient.id == req.client_id).first()
+            if not c or c.partner_id != user["partner_id"]:
+                raise HTTPException(status_code=403, detail="Cliente não pertence a este parceiro")
+        finally:
+            db_check.close()
+
+    if req.role not in ("master", "partner", "client"):
+        raise HTTPException(status_code=400, detail="role inválido")
+
+    if not req.password or len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Senha deve ter ao menos 6 caracteres")
+
+    db = SessionLocal()
+    try:
+        existing = db.query(DashUser).filter(DashUser.email == req.email.strip().lower()).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="Email já cadastrado")
+        new_user = DashUser(
+            email=req.email.strip().lower(),
+            password_hash=hash_password(req.password),
+            role=req.role,
+            partner_id=req.partner_id,
+            client_id=req.client_id,
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        return {"id": new_user.id, "email": new_user.email, "role": new_user.role}
+    finally:
+        db.close()
+
+
+@router.patch("/users/{user_id}")
+def patch_user(user_id: int, req: PatchUserRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Atualiza usuário: reseta senha e/ou ativa/desativa.
+    - Master: qualquer usuário
+    - Partner: apenas usuários dos próprios clientes
+    """
+    if current_user["role"] == "client":
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    db = SessionLocal()
+    try:
+        target = db.query(DashUser).filter(DashUser.id == user_id).first()
+        if not target:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+        # Partner: valida que o usuário alvo é cliente próprio
+        if current_user["role"] == "partner":
+            if not target.client_id:
+                raise HTTPException(status_code=403, detail="Acesso negado")
+            c = db.query(DashClient).filter(DashClient.id == target.client_id).first()
+            if not c or c.partner_id != current_user["partner_id"]:
+                raise HTTPException(status_code=403, detail="Acesso negado")
+
+        if req.new_password is not None:
+            if len(req.new_password) < 6:
+                raise HTTPException(status_code=400, detail="Senha deve ter ao menos 6 caracteres")
+            target.password_hash = hash_password(req.new_password)
+
+        if req.active is not None:
+            target.active = req.active
+
+        db.commit()
+        return {"ok": True, "id": target.id, "email": target.email, "active": target.active}
+    finally:
+        db.close()
+
+
 # ── OAuth callback para Dashboard ────────────────────────────────────
 
 
