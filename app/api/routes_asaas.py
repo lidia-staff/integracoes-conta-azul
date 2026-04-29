@@ -38,7 +38,7 @@ def _auto_register_webhook(client: AsaasClient, company_id: int) -> tuple:
     try:
         # Busca email da conta para campo obrigatório do Asaas
         account_info = client.get_account_info()
-        email = account_info.get("email") or account_info.get("loginEmail") or "noreply@staffconsult.com.br"
+        email = account_info.get("email") or account_info.get("loginEmail") or "noreply@staffconect.com.br"
 
         existing = client.list_webhooks()
         for wh in existing:
