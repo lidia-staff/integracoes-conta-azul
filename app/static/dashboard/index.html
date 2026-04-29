@@ -286,14 +286,38 @@ td.pct { color:var(--muted); font-size:11px; }
             <div class="painel-sub">Staff Assessoria e Consultoria</div>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="btn-secondary" onclick="abrirCriarParceiro()">+ Parceiro</button>
+            <button class="btn-secondary" onclick="abrirModalParceiro()">+ Parceiro</button>
             <button class="btn-primary" onclick="window.location.href='/dashboard/onboarding'">+ Cliente</button>
           </div>
         </div>
-        <table class="master-table" id="master-clients-table">
-          <thead><tr><th>Cliente</th><th>Parceiro</th><th>Segmento</th><th>Último Snapshot</th><th>Status</th><th>Ações</th></tr></thead>
-          <tbody id="master-clients-tbody"></tbody>
-        </table>
+
+        <!-- ABAS: Clientes / Parceiros -->
+        <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px">
+          <button id="master-tab-clientes" onclick="masterTab('clientes')"
+            style="padding:10px 20px;background:none;border:none;border-bottom:2px solid var(--brand);color:var(--brand);cursor:pointer;font-size:13px;font-weight:600">
+            Clientes
+          </button>
+          <button id="master-tab-parceiros" onclick="masterTab('parceiros')"
+            style="padding:10px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-size:13px">
+            Parceiros
+          </button>
+        </div>
+
+        <!-- TABELA CLIENTES -->
+        <div id="master-section-clientes">
+          <table class="master-table" id="master-clients-table">
+            <thead><tr><th>Cliente</th><th>Parceiro</th><th>Segmento</th><th>Último Snapshot</th><th>Status</th><th>Ações</th></tr></thead>
+            <tbody id="master-clients-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- TABELA PARCEIROS -->
+        <div id="master-section-parceiros" style="display:none">
+          <table class="master-table" id="master-partners-table">
+            <thead><tr><th>Nome</th><th>Slug</th><th>Cor</th><th>Clientes</th><th>Ações</th></tr></thead>
+            <tbody id="master-partners-tbody"></tbody>
+          </table>
+        </div>
       </div>
 
       <!-- PÁGINA: DRE -->
@@ -594,6 +618,18 @@ async function loadPainelParceiro() {
 // ═══════════════════════════════════════════════════════════════════
 // PAINEL MASTER
 // ═══════════════════════════════════════════════════════════════════
+function masterTab(tab) {
+  document.getElementById('master-section-clientes').style.display = tab === 'clientes' ? 'block' : 'none';
+  document.getElementById('master-section-parceiros').style.display = tab === 'parceiros' ? 'block' : 'none';
+  document.getElementById('master-tab-clientes').style.borderBottomColor = tab === 'clientes' ? 'var(--brand)' : 'transparent';
+  document.getElementById('master-tab-clientes').style.color = tab === 'clientes' ? 'var(--brand)' : 'var(--muted)';
+  document.getElementById('master-tab-clientes').style.fontWeight = tab === 'clientes' ? '600' : 'normal';
+  document.getElementById('master-tab-parceiros').style.borderBottomColor = tab === 'parceiros' ? 'var(--brand)' : 'transparent';
+  document.getElementById('master-tab-parceiros').style.color = tab === 'parceiros' ? 'var(--brand)' : 'var(--muted)';
+  document.getElementById('master-tab-parceiros').style.fontWeight = tab === 'parceiros' ? '600' : 'normal';
+  if (tab === 'parceiros') loadParceiros();
+}
+
 async function loadPainelMaster() {
   showLoading('Carregando dados...');
   try {
@@ -602,12 +638,14 @@ async function loadPainelMaster() {
     tbody.innerHTML = clients.map(c => `
       <tr>
         <td><strong>${c.name}</strong></td>
-        <td>${c.partner_name || c.partner_id || '—'}</td>
+        <td>${c.partner_name || '—'}</td>
         <td>${SEGMENT_LABEL[c.segment] || c.segment}</td>
         <td>${c.last_snapshot ? formatMonthLabel(c.last_snapshot) : '—'}</td>
         <td>${c.last_snapshot ? '<span style="color:var(--green);font-weight:600">● OK</span>' : '<span style="color:#f5a623;font-weight:600">● Pendente</span>'}</td>
         <td>
-          <button class="link-btn" onclick="abrirCliente(${c.id})">Ver Dashboard</button>
+          <button class="link-btn" onclick="abrirCliente(${c.id})">Ver</button>
+          &nbsp;·&nbsp;
+          <button class="link-btn" onclick="abrirModalEditarCliente(${c.id},'${c.name.replace(/'/g,"\\'")}','${c.segment}',${c.partner_id||'null'})">✏ Editar</button>
           &nbsp;·&nbsp;
           <button class="link-btn" onclick="runSnapshotManual(${c.id})">Atualizar</button>
           &nbsp;·&nbsp;
@@ -618,6 +656,31 @@ async function loadPainelMaster() {
     showError(e.message);
   } finally {
     hideLoading();
+  }
+}
+
+async function loadParceiros() {
+  const tbody = document.getElementById('master-partners-tbody');
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">Carregando…</td></tr>';
+  try {
+    const partners = await apiFetch('/dashboard/partners');
+    tbody.innerHTML = partners.map(p => `
+      <tr>
+        <td><strong>${p.name}</strong></td>
+        <td style="color:var(--muted);font-size:12px">${p.slug || '—'}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:18px;height:18px;border-radius:4px;background:${p.primary_color||'#F26522'};border:1px solid var(--border)"></div>
+            <span style="font-size:12px;color:var(--muted);font-family:monospace">${p.primary_color||'—'}</span>
+          </div>
+        </td>
+        <td style="color:var(--muted)">${p.total_clients} cliente(s)</td>
+        <td>
+          <button class="link-btn" onclick="abrirModalEditarParceiro(${p.id},'${p.name.replace(/'/g,"\\'")}','${p.slug||''}','${p.logo_url||''}','${p.primary_color||'#F26522'}')">✏ Editar</button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">Nenhum parceiro cadastrado</td></tr>';
+  } catch(e) {
+    showError(e.message);
   }
 }
 
@@ -1658,12 +1721,184 @@ function doLogout() {
   location.reload();
 }
 
-function abrirCriarParceiro() {
-  const name = prompt('Nome do parceiro:');
-  if (!name) return;
-  apiFetch('/dashboard/partners', 'POST', { name })
-    .then(() => { alert('Parceiro criado!'); loadPainelMaster(); })
-    .catch(e => alert('Erro: ' + e.message));
+// ═══════════════════════════════════════════════════════════════════
+// EDIÇÃO DE PARCEIRO
+// ═══════════════════════════════════════════════════════════════════
+
+function _modalParceiroHtml(titulo, id, name, slug, logoUrl, color) {
+  return `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;min-width:360px;max-width:460px;width:90%">
+      <h3 style="margin:0 0 20px;color:var(--text);font-family:'Syne',sans-serif">${titulo}</h3>
+
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Nome *</label>
+      <input id="ep-name" type="text" value="${name}" placeholder="Nome do parceiro"
+        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box">
+
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Slug (URL)</label>
+      <input id="ep-slug" type="text" value="${slug}" placeholder="ex: santos-financeiro"
+        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box">
+
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">URL do Logo</label>
+      <input id="ep-logo" type="url" value="${logoUrl}" placeholder="https://..."
+        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box">
+
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Cor principal</label>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px">
+        <input type="color" id="ep-color-picker" value="${color}"
+          style="width:48px;height:40px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;padding:2px">
+        <input type="text" id="ep-color-hex" value="${color}" maxlength="7"
+          style="flex:1;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:monospace">
+        <div id="ep-color-prev" style="width:40px;height:40px;border-radius:8px;background:${color};border:1px solid var(--border)"></div>
+      </div>
+
+      <div id="ep-error" style="display:none;background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.3);color:#ff6b6b;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px"></div>
+
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('modal-parceiro').remove()"
+          style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:14px">Cancelar</button>
+        <button onclick="${id ? `salvarEditarParceiro(${id})` : 'salvarCriarParceiro()'}"
+          style="flex:1;padding:10px;background:var(--brand);border:none;border-radius:8px;color:#000;font-weight:700;cursor:pointer;font-size:14px">Salvar</button>
+      </div>
+    </div>`;
+}
+
+function _syncParceiroColorPicker() {
+  const picker = document.getElementById('ep-color-picker');
+  const hex    = document.getElementById('ep-color-hex');
+  const prev   = document.getElementById('ep-color-prev');
+  if (!picker) return;
+  picker.oninput = () => { hex.value = picker.value; prev.style.background = picker.value; };
+  hex.oninput = () => { if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) { picker.value = hex.value; prev.style.background = hex.value; } };
+}
+
+function abrirModalParceiro() {
+  const modal = document.createElement('div');
+  modal.id = 'modal-parceiro';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:9999';
+  modal.innerHTML = _modalParceiroHtml('Novo Parceiro', null, '', '', '', '#F26522');
+  document.body.appendChild(modal);
+  _syncParceiroColorPicker();
+}
+
+async function salvarCriarParceiro() {
+  const name  = document.getElementById('ep-name').value.trim();
+  const slug  = document.getElementById('ep-slug').value.trim();
+  const logo  = document.getElementById('ep-logo').value.trim();
+  const color = document.getElementById('ep-color-hex').value.trim();
+  const errEl = document.getElementById('ep-error');
+  errEl.style.display = 'none';
+  if (!name) { errEl.textContent = 'Nome é obrigatório'; errEl.style.display='block'; return; }
+  try {
+    await apiFetch('/dashboard/partners', 'POST', { name, slug: slug||null, logo_url: logo||null, primary_color: color });
+    document.getElementById('modal-parceiro').remove();
+    showToast('Parceiro criado com sucesso', 'success');
+    loadPainelMaster();
+    masterTab('parceiros');
+  } catch(e) {
+    errEl.textContent = e.message || 'Erro ao criar parceiro';
+    errEl.style.display = 'block';
+  }
+}
+
+function abrirModalEditarParceiro(id, name, slug, logoUrl, color) {
+  const modal = document.createElement('div');
+  modal.id = 'modal-parceiro';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:9999';
+  modal.innerHTML = _modalParceiroHtml('Editar Parceiro', id, name, slug, logoUrl, color);
+  document.body.appendChild(modal);
+  _syncParceiroColorPicker();
+}
+
+async function salvarEditarParceiro(id) {
+  const name  = document.getElementById('ep-name').value.trim();
+  const slug  = document.getElementById('ep-slug').value.trim();
+  const logo  = document.getElementById('ep-logo').value.trim();
+  const color = document.getElementById('ep-color-hex').value.trim();
+  const errEl = document.getElementById('ep-error');
+  errEl.style.display = 'none';
+  if (!name) { errEl.textContent = 'Nome é obrigatório'; errEl.style.display='block'; return; }
+  try {
+    await apiFetch(`/dashboard/partners/${id}`, 'PUT', { name, slug: slug||null, logo_url: logo||null, primary_color: color });
+    document.getElementById('modal-parceiro').remove();
+    showToast('Parceiro atualizado', 'success');
+    loadParceiros();
+  } catch(e) {
+    errEl.textContent = e.message || 'Erro ao salvar';
+    errEl.style.display = 'block';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// EDIÇÃO DE CLIENTE
+// ═══════════════════════════════════════════════════════════════════
+
+async function abrirModalEditarCliente(id, name, segment, partnerId) {
+  let partners = [];
+  try { partners = await apiFetch('/dashboard/partners'); } catch(e) {}
+
+  const partnerOptions = partners.map(p =>
+    `<option value="${p.id}" ${p.id === partnerId ? 'selected' : ''}>${p.name}</option>`
+  ).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-editar-cliente';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:9999';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;min-width:360px;max-width:460px;width:90%">
+      <h3 style="margin:0 0 6px;color:var(--text);font-family:'Syne',sans-serif">Editar Cliente</h3>
+      <p style="margin:0 0 20px;font-size:13px;color:var(--muted)">${name}</p>
+
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Nome *</label>
+      <input id="ec-name" type="text" value="${name}"
+        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box">
+
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Segmento</label>
+      <select id="ec-segment"
+        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box">
+        <option value="servico" ${segment==='servico'?'selected':''}>Serviço</option>
+        <option value="estetica" ${segment==='estetica'?'selected':''}>Estética</option>
+        <option value="construcao" ${segment==='construcao'?'selected':''}>Construção</option>
+        <option value="comercio" ${segment==='comercio'?'selected':''}>Comércio</option>
+      </select>
+
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Parceiro</label>
+      <select id="ec-partner"
+        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:20px;box-sizing:border-box">
+        <option value="">— Sem parceiro —</option>${partnerOptions}
+      </select>
+
+      <div id="ec-error" style="display:none;background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.3);color:#ff6b6b;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px"></div>
+
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('modal-editar-cliente').remove()"
+          style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:14px">Cancelar</button>
+        <button onclick="salvarEditarCliente(${id})"
+          style="flex:1;padding:10px;background:var(--brand);border:none;border-radius:8px;color:#000;font-weight:700;cursor:pointer;font-size:14px">Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function salvarEditarCliente(id) {
+  const name      = document.getElementById('ec-name').value.trim();
+  const segment   = document.getElementById('ec-segment').value;
+  const partnerId = document.getElementById('ec-partner').value;
+  const errEl     = document.getElementById('ec-error');
+  errEl.style.display = 'none';
+  if (!name) { errEl.textContent = 'Nome é obrigatório'; errEl.style.display='block'; return; }
+  try {
+    await apiFetch(`/dashboard/clients/${id}`, 'PUT', {
+      name,
+      segment,
+      partner_id: partnerId ? parseInt(partnerId) : null,
+    });
+    document.getElementById('modal-editar-cliente').remove();
+    showToast('Cliente atualizado', 'success');
+    loadPainelMaster();
+  } catch(e) {
+    errEl.textContent = e.message || 'Erro ao salvar';
+    errEl.style.display = 'block';
+  }
 }
 </script>
 </body>
