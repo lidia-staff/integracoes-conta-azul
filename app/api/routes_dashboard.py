@@ -232,6 +232,7 @@ def list_partners(_: dict = Depends(require_master)):
                 "slug": p.slug,
                 "logo_url": p.logo_url,
                 "primary_color": p.primary_color,
+                "active": p.active if p.active is not None else True,
                 "total_clients": len(p.clients),
             }
             for p in partners
@@ -245,6 +246,7 @@ class UpdatePartnerRequest(BaseModel):
     slug: str | None = None
     logo_url: str | None = None
     primary_color: str | None = None
+    active: bool | None = None
 
 
 @router.put("/partners/{partner_id}")
@@ -262,8 +264,26 @@ def update_partner(partner_id: int, req: UpdatePartnerRequest, _: dict = Depends
             partner.logo_url = req.logo_url or None
         if req.primary_color is not None:
             partner.primary_color = req.primary_color
+        if req.active is not None:
+            partner.active = req.active
         db.commit()
         return {"ok": True, "id": partner.id, "name": partner.name}
+    finally:
+        db.close()
+
+
+@router.delete("/partners/{partner_id}")
+def delete_partner(partner_id: int, _: dict = Depends(require_master)):
+    """Remove parceiro e todos os clientes/snapshots associados — apenas Master."""
+    db = SessionLocal()
+    try:
+        partner = db.query(DashPartner).filter(DashPartner.id == partner_id).first()
+        if not partner:
+            raise HTTPException(status_code=404, detail="Parceiro não encontrado")
+        total_clients = len(partner.clients)
+        db.delete(partner)
+        db.commit()
+        return {"ok": True, "deleted": partner_id, "clients_removed": total_clients}
     finally:
         db.close()
 
@@ -460,6 +480,13 @@ class PatchUserRequest(BaseModel):
     active: bool | None = None
 
 
+class UpdateUserRequest(BaseModel):
+    email: str | None = None
+    role: str | None = None
+    partner_id: int | None = None
+    client_id: int | None = None
+
+
 @router.get("/users")
 def list_users(user: dict = Depends(get_current_user)):
     """
@@ -593,6 +620,60 @@ def patch_user(user_id: int, req: PatchUserRequest, current_user: dict = Depends
 
         db.commit()
         return {"ok": True, "id": target.id, "email": target.email, "active": target.active}
+    finally:
+        db.close()
+
+
+@router.put("/users/{user_id}")
+def update_user_full(user_id: int, req: UpdateUserRequest, _: dict = Depends(require_master)):
+    """Edita dados do usuário (email, role, vínculos) — apenas Master."""
+    db = SessionLocal()
+    try:
+        target = db.query(DashUser).filter(DashUser.id == user_id).first()
+        if not target:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+        fields_set = req.model_fields_set
+
+        if "email" in fields_set and req.email is not None:
+            existing = db.query(DashUser).filter(
+                DashUser.email == req.email.strip().lower(),
+                DashUser.id != user_id,
+            ).first()
+            if existing:
+                raise HTTPException(status_code=409, detail="Email já cadastrado por outro usuário")
+            target.email = req.email.strip().lower()
+
+        if "role" in fields_set and req.role is not None:
+            if req.role not in ("master", "partner", "client"):
+                raise HTTPException(status_code=400, detail="role inválido")
+            target.role = req.role
+
+        if "partner_id" in fields_set:
+            target.partner_id = req.partner_id  # pode ser None para limpar
+
+        if "client_id" in fields_set:
+            target.client_id = req.client_id  # pode ser None para limpar
+
+        db.commit()
+        return {"ok": True, "id": target.id, "email": target.email, "role": target.role}
+    finally:
+        db.close()
+
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: int, current_user: dict = Depends(require_master)):
+    """Remove usuário — apenas Master. Não permite remover a si mesmo."""
+    db = SessionLocal()
+    try:
+        target = db.query(DashUser).filter(DashUser.id == user_id).first()
+        if not target:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        if str(target.id) == str(current_user.get("sub")):
+            raise HTTPException(status_code=400, detail="Não é possível excluir o próprio usuário")
+        db.delete(target)
+        db.commit()
+        return {"ok": True, "deleted": user_id}
     finally:
         db.close()
 

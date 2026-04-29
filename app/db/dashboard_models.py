@@ -14,6 +14,7 @@ class DashPartner(Base):
     slug = Column(String(100), nullable=True, unique=True)
     logo_url = Column(Text, nullable=True)
     primary_color = Column(String(20), nullable=True, default="#F26522")
+    active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     clients = relationship("DashClient", back_populates="partner", cascade="all, delete-orphan")
