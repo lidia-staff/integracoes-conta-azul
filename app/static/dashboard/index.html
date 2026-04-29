@@ -179,6 +179,14 @@ td.pct { color:var(--muted); font-size:11px; }
 .link-btn { background:none; border:none; color:var(--brand); font-size:13px; font-weight:600; cursor:pointer; padding:0; }
 .link-btn:hover { text-decoration:underline; }
 
+/* ── TOAST ── */
+.toast { position:fixed; bottom:24px; right:24px; background:var(--surface); border:1px solid var(--border);
+         padding:12px 18px; border-radius:10px; font-size:13px; z-index:99999;
+         animation:slideInToast .2s ease; box-shadow:0 4px 20px rgba(0,0,0,.4); max-width:320px; }
+.toast-success { border-left:3px solid var(--brand); }
+.toast-error   { border-left:3px solid #e05252; color:#ff6b6b; }
+@keyframes slideInToast { from { transform:translateX(20px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+
 @media (max-width:900px) {
   :root { --sidebar-w:0px; }
   .sidebar { display:none; }
@@ -304,6 +312,21 @@ td.pct { color:var(--muted); font-size:11px; }
       <div class="page" id="page-indicadores">
         <div class="kpi-grid" id="ind-kpis"></div>
         <div class="ind-grid" id="ind-cards"></div>
+      </div>
+
+      <!-- PÁGINA: USUÁRIOS (master + partner) -->
+      <div class="page" id="page-usuarios">
+        <div class="painel-header">
+          <div>
+            <div class="painel-title">Usuários</div>
+            <div class="painel-sub" id="usuarios-sub"></div>
+          </div>
+          <button class="btn-primary" onclick="abrirModalCriarUsuario()">+ Usuário</button>
+        </div>
+        <table class="master-table" id="usuarios-table">
+          <thead><tr><th>Email</th><th>Role</th><th>Vinculado a</th><th>Criado em</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody id="usuarios-tbody"></tbody>
+        </table>
       </div>
 
       <!-- PÁGINA: FATURAMENTO -->
@@ -491,6 +514,10 @@ function buildSidebar() {
       </div>
       <div class="nav-item" id="nav-fat" style="display:none" onclick="showPage('faturamento')">
         <span class="nav-icon">💰</span> Faturamento
+      </div>
+      <div class="nav-section-label">Administração</div>
+      <div class="nav-item" id="nav-usuarios" onclick="showPage('usuarios');loadUsuarios()">
+        <span class="nav-icon">👥</span> Usuários
       </div>`;
   }
   html += `
@@ -591,6 +618,203 @@ async function loadPainelMaster() {
     showError(e.message);
   } finally {
     hideLoading();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GESTÃO DE USUÁRIOS
+// ═══════════════════════════════════════════════════════════════════
+
+const ROLE_LABEL = { master: 'Master', partner: 'Parceiro', client: 'Cliente' };
+
+async function loadUsuarios() {
+  showLoading('Carregando usuários...');
+  try {
+    const users = await apiFetch('/dashboard/users');
+    const tbody = document.getElementById('usuarios-tbody');
+    document.getElementById('usuarios-sub').textContent = `${users.length} usuário(s) cadastrado(s)`;
+    tbody.innerHTML = users.map(u => {
+      const vinculo = u.client_name || u.partner_name || '—';
+      const statusHtml = u.active
+        ? '<span style="color:var(--green);font-weight:600">● Ativo</span>'
+        : '<span style="color:#e05252;font-weight:600">● Inativo</span>';
+      const criado = u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—';
+      const desativarBtn = STATE.role === 'master'
+        ? `&nbsp;·&nbsp;<button class="link-btn" style="color:${u.active?'#e05252':'var(--brand)'}" onclick="toggleUsuario(${u.id},${!u.active},'${u.email.replace(/'/g,"\\'")}')">
+            ${u.active ? 'Desativar' : 'Ativar'}</button>`
+        : '';
+      return `<tr>
+        <td><strong>${u.email}</strong></td>
+        <td><span style="font-size:11px;padding:2px 8px;border-radius:20px;background:rgba(0,229,160,.1);color:var(--brand);font-weight:600">${ROLE_LABEL[u.role]||u.role}</span></td>
+        <td>${vinculo}</td>
+        <td style="font-size:12px;color:var(--muted)">${criado}</td>
+        <td>${statusHtml}</td>
+        <td>
+          <button class="link-btn" onclick="abrirModalResetSenha(${u.id},'${u.email.replace(/'/g,"\\'")}')">Resetar senha</button>
+          ${desativarBtn}
+        </td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Nenhum usuário encontrado</td></tr>';
+  } catch(e) {
+    showError(e.message);
+  } finally {
+    hideLoading();
+  }
+}
+
+async function abrirModalCriarUsuario() {
+  // Busca listas de parceiros e clientes para os selects
+  let partners = [], clients = [];
+  try {
+    if (STATE.role === 'master') {
+      [partners, clients] = await Promise.all([
+        apiFetch('/dashboard/partners'),
+        apiFetch('/dashboard/clients'),
+      ]);
+    } else {
+      clients = await apiFetch('/dashboard/clients');
+    }
+  } catch(e) {}
+
+  const isMaster = STATE.role === 'master';
+  const partnerOptions = partners.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  const clientOptions = clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-criar-usuario';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:9999';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;min-width:360px;max-width:440px;width:90%">
+      <h3 style="margin:0 0 20px;color:var(--text);font-family:'Syne',sans-serif">Novo Usuário</h3>
+
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Email</label>
+      <input id="nu-email" type="email" placeholder="usuario@email.com"
+        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box">
+
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Senha</label>
+      <input id="nu-senha" type="password" placeholder="Mínimo 6 caracteres"
+        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box">
+
+      ${isMaster ? `
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Role</label>
+      <select id="nu-role" onchange="onRoleChange()"
+        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box">
+        <option value="client">Cliente</option>
+        <option value="partner">Parceiro</option>
+        <option value="master">Master</option>
+      </select>` : `<input type="hidden" id="nu-role" value="client">`}
+
+      <div id="nu-partner-wrap" style="display:none">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Parceiro</label>
+        <select id="nu-partner"
+          style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box">
+          <option value="">— Selecione —</option>${partnerOptions}
+        </select>
+      </div>
+
+      <div id="nu-client-wrap" style="${clients.length ? '' : 'display:none'}">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Cliente</label>
+        <select id="nu-client"
+          style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box">
+          <option value="">— Selecione —</option>${clientOptions}
+        </select>
+      </div>
+
+      <div id="nu-error" style="display:none;background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.3);color:#ff6b6b;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px"></div>
+
+      <div style="display:flex;gap:10px;margin-top:4px">
+        <button onclick="document.getElementById('modal-criar-usuario').remove()"
+          style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:14px">Cancelar</button>
+        <button onclick="salvarNovoUsuario()"
+          style="flex:1;padding:10px;background:var(--brand);border:none;border-radius:8px;color:#000;font-weight:700;cursor:pointer;font-size:14px">Criar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  if (isMaster) onRoleChange();
+}
+
+function onRoleChange() {
+  const role = document.getElementById('nu-role')?.value;
+  document.getElementById('nu-partner-wrap').style.display = role === 'partner' ? 'block' : 'none';
+  document.getElementById('nu-client-wrap').style.display = role === 'client' ? 'block' : 'none';
+}
+
+async function salvarNovoUsuario() {
+  const email = document.getElementById('nu-email').value.trim();
+  const senha = document.getElementById('nu-senha').value;
+  const role  = document.getElementById('nu-role').value;
+  const partnerId = document.getElementById('nu-partner')?.value || null;
+  const clientId  = document.getElementById('nu-client')?.value || null;
+  const errEl = document.getElementById('nu-error');
+  errEl.style.display = 'none';
+
+  if (!email || !senha) { errEl.textContent = 'Preencha email e senha'; errEl.style.display='block'; return; }
+  if (senha.length < 6)  { errEl.textContent = 'Senha mínima de 6 caracteres'; errEl.style.display='block'; return; }
+
+  try {
+    await apiFetch('/dashboard/users', 'POST', {
+      email, password: senha, role,
+      partner_id: partnerId ? parseInt(partnerId) : null,
+      client_id:  clientId  ? parseInt(clientId)  : null,
+    });
+    document.getElementById('modal-criar-usuario').remove();
+    loadUsuarios();
+    showToast('Usuário criado com sucesso', 'success');
+  } catch(e) {
+    errEl.textContent = e.message || 'Erro ao criar usuário';
+    errEl.style.display = 'block';
+  }
+}
+
+function abrirModalResetSenha(userId, email) {
+  const modal = document.createElement('div');
+  modal.id = 'modal-reset-usuario';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:9999';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;min-width:340px;max-width:420px;width:90%">
+      <h3 style="margin:0 0 6px;color:var(--text);font-family:'Syne',sans-serif">Resetar Senha</h3>
+      <p style="margin:0 0 18px;font-size:13px;color:var(--muted)">${email}</p>
+
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Nova Senha</label>
+      <input id="rs-senha" type="password" placeholder="Mínimo 6 caracteres"
+        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box">
+
+      <div id="rs-error" style="display:none;background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.3);color:#ff6b6b;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:14px"></div>
+
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('modal-reset-usuario').remove()"
+          style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:14px">Cancelar</button>
+        <button onclick="confirmarResetSenha(${userId})"
+          style="flex:1;padding:10px;background:var(--brand);border:none;border-radius:8px;color:#000;font-weight:700;cursor:pointer;font-size:14px">Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function confirmarResetSenha(userId) {
+  const senha = document.getElementById('rs-senha').value;
+  const errEl = document.getElementById('rs-error');
+  errEl.style.display = 'none';
+  if (!senha || senha.length < 6) { errEl.textContent = 'Senha mínima de 6 caracteres'; errEl.style.display='block'; return; }
+  try {
+    await apiFetch(`/dashboard/users/${userId}`, 'PATCH', { new_password: senha });
+    document.getElementById('modal-reset-usuario').remove();
+    showToast('Senha redefinida com sucesso', 'success');
+  } catch(e) {
+    errEl.textContent = e.message || 'Erro ao redefinir senha';
+    errEl.style.display = 'block';
+  }
+}
+
+async function toggleUsuario(userId, ativar, email) {
+  const acao = ativar ? 'ativar' : 'desativar';
+  if (!confirm(`Deseja ${acao} o usuário ${email}?`)) return;
+  try {
+    await apiFetch(`/dashboard/users/${userId}`, 'PATCH', { active: ativar });
+    loadUsuarios();
+    showToast(`Usuário ${ativar ? 'ativado' : 'desativado'} com sucesso`, 'success');
+  } catch(e) {
+    showError(e.message);
   }
 }
 
@@ -1401,7 +1625,15 @@ function hideLoading() {
 }
 function showError(msg) {
   console.error(msg);
-  alert('Erro: ' + msg);
+  showToast(msg, 'error');
+}
+
+function showToast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
 }
 
 async function apiFetch(path, method='GET', body=null, withAuth=true) {
